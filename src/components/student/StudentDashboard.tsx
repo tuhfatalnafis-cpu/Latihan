@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { 
   BookOpen, 
   ChevronRight, 
@@ -37,6 +38,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [topicStats, setTopicStats] = useState<Record<string, { total: number, mastered: number }>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,6 +57,14 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       } else if (view.type === 'browse_topics') {
         const data = await db.topics.listForSyllabus(view.syllabus.id);
         setTopics(data);
+        
+        // Fetch stats for each topic
+        const stats: Record<string, { total: number, mastered: number }> = {};
+        for (const topic of data) {
+          const s = await db.topics.getStats(topic.id, user.id);
+          stats[topic.id] = s;
+        }
+        setTopicStats(stats);
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -182,21 +192,43 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                 </button>
               ))}
 
-              {view.type === 'browse_topics' && topics.map(t => (
-                <button 
-                  key={t.id} 
-                  onClick={() => setView({ type: 'study', topic: t, subject: view.subject, syllabus: view.syllabus })}
-                  className="bg-white p-8 rounded-[32px] border-2 border-transparent hover:border-emerald-500 shadow-sm hover:shadow-xl transition-all group text-left flex flex-col items-start min-h-[220px]"
-                >
-                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                     <BrainCircuit className="w-8 h-8" />
-                  </div>
-                  <h4 className="text-xl font-black text-slate-800 mb-1 leading-tight">{t.name}</h4>
-                  <p className="text-slate-400 text-sm font-bold mt-auto flex items-center gap-2">
-                    Mula Belajar <ArrowRight className="w-4 h-4" />
-                  </p>
-                </button>
-              ))}
+              {view.type === 'browse_topics' && topics.map(t => {
+                const stats = topicStats[t.id] || { mastered: 0, total: 0 };
+                const percentage = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
+                
+                return (
+                  <button 
+                    key={t.id} 
+                    onClick={() => setView({ type: 'study', topic: t, subject: view.subject, syllabus: view.syllabus })}
+                    className="bg-white p-8 rounded-[32px] border-2 border-transparent hover:border-emerald-500 shadow-sm hover:shadow-xl transition-all group text-left flex flex-col items-start min-h-[260px] relative overflow-hidden"
+                  >
+                    <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                       <BrainCircuit className="w-8 h-8" />
+                    </div>
+                    <div className="mb-4">
+                      <h4 className="text-xl font-black text-slate-800 mb-1 leading-tight">{t.name}</h4>
+                      <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{stats.total} Perkataan</p>
+                    </div>
+
+                    <div className="w-full mt-auto space-y-2">
+                      <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mastery</span>
+                        <span className="text-sm font-black text-emerald-600">{percentage}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${percentage}%` }}
+                          className="h-full bg-emerald-500"
+                        />
+                      </div>
+                      <p className="text-slate-400 text-[10px] font-bold mt-2 flex items-center gap-2 group-hover:text-emerald-600 transition-colors">
+                        Mula Belajar <ArrowRight className="w-3 h-3" />
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
 
               {/* Empty State */}
               {((view.type === 'browse_subjects' && subjects.length === 0) ||

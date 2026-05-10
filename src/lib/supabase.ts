@@ -2,11 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 
 const getVal = (v: any) => (typeof v === 'string' ? v : '');
 
+// Safer access to environment variables to avoid ReferenceError in some environments
+const env = typeof process !== 'undefined' ? process.env : (import.meta as any).env;
+
 const supabaseUrl = (
-  getVal((import.meta as any).env.VITE_SUPABASE_URL) || 
-  getVal((import.meta as any).env.SUPABASE_URL) || 
-  getVal(process.env.VITE_SUPABASE_URL) || 
-  getVal(process.env.SUPABASE_URL) || 
+  getVal((import.meta as any).env?.VITE_SUPABASE_URL) || 
+  getVal((import.meta as any).env?.SUPABASE_URL) || 
+  getVal(env?.VITE_SUPABASE_URL) || 
+  getVal(env?.SUPABASE_URL) || 
   ''
 ).trim()
   .replace(/\/$/, '')
@@ -16,13 +19,17 @@ const supabaseUrl = (
   .replace(/\/realtime\/v1$/, '');
 
 const supabaseAnonKey = (
-  getVal((import.meta as any).env.VITE_SUPABASE_ANON_KEY) || 
-  getVal(process.env.VITE_SUPABASE_ANON_KEY) || 
+  getVal((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || 
+  getVal(env?.VITE_SUPABASE_ANON_KEY) || 
   ''
 ).trim();
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase configuration missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+}
+
 // Export a real client. If keys are missing, it will still export but operations will fail gracefully.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder');
 
 export type UserRole = 'admin' | 'student';
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, 
   CheckCircle2, 
@@ -33,16 +33,29 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<SessionMode>('browse');
   const [showSummary, setShowSummary] = useState(false);
+  const [topicStats, setTopicStats] = useState<{ total: number, mastered: number }>({ total: 0, mastered: 0 });
   const [isFlipped, setIsFlipped] = useState(false); // For flashcards
   const [startTime, setStartTime] = useState<number>(Date.now());
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [isMastered, setIsMastered] = useState(false); // New mastery spark
 
   useEffect(() => {
     fetchQuestions();
+    fetchTopicStats();
   }, [topic.id, mode]);
+
+  const fetchTopicStats = async () => {
+    try {
+      const stats = await db.topics.getStats(topic.id, user.id);
+      setTopicStats(stats);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchQuestions = async () => {
     setLoading(true);
+    setIsMastered(false);
     try {
       if (mode === 'browse') {
         const data = await db.questions.listForTopic(topic.id);
@@ -66,11 +79,17 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
 
   const currentQuestion = questions[currentIndex];
 
+  const allMultipleChoiceOptions = useMemo(() => {
+    if (!currentQuestion || currentQuestion.question_type !== 'multiple_choice') return [];
+    return [currentQuestion.answer, ...(currentQuestion.distractors || [])].sort(() => Math.random() - 0.5);
+  }, [currentQuestion?.id]);
+
   const handleAnswer = async (isCorrect: boolean) => {
     if (feedback) return; // Prevent double taps
 
     const timeSpent = Date.now() - startTime;
     setFeedback(isCorrect ? 'correct' : 'wrong');
+    setIsMastered(false);
 
     try {
       // 1. Record Attempt
@@ -90,22 +109,29 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
         existingProgress?.consecutive_correct
       );
       
-      await db.progress.upsert({
+      const updated = await db.progress.upsert({
         student_id: user.id,
         question_id: currentQuestion.id,
         ...srsResult
       });
+
+      // Check if newly mastered
+      if (isCorrect && updated.consecutive_correct === 3) {
+        setIsMastered(true);
+      }
 
       setResults([...results, { questionId: currentQuestion.id, isCorrect }]);
 
       // 3. Move to next after a delay
       setTimeout(() => {
         setFeedback(null);
+        setIsMastered(false);
         setIsFlipped(false);
         if (currentIndex < questions.length - 1) {
           setCurrentIndex(currentIndex + 1);
           setStartTime(Date.now());
         } else {
+          fetchTopicStats(); // Fetch updated stats for summary
           setShowSummary(true);
         }
       }, 1000);
@@ -137,7 +163,6 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
             {/* Back */}
             <div className="absolute inset-0 backface-hidden bg-indigo-600 rounded-[40px] shadow-2xl flex flex-col items-center justify-center p-12 text-center [transform:rotateY(180deg)] text-white">
                <h3 className="text-arabic text-5xl font-black mb-4 leading-tight">{answer}</h3>
-               {currentQuestion.transliteration && <p className="text-indigo-200 text-lg font-bold tracking-tight italic">{currentQuestion.transliteration}</p>}
                <p className="mt-8 text-indigo-300 font-bold text-xs uppercase tracking-widest">Klik untuk balik semula</p>
             </div>
           </motion.div>
@@ -163,7 +188,6 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
     }
 
     if (question_type === 'multiple_choice') {
-      const allOptions = useMemo(() => [answer, ...(distractors || [])].sort(() => Math.random() - 0.5), [currentQuestion.id]);
       const isArabicPrompt = metadata.direction === 'ar_to_ms';
       const isArabicOptions = metadata.direction === 'ms_to_ar';
 
@@ -171,19 +195,16 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
         <div className="w-full max-w-2xl mx-auto">
           <div className="bg-white rounded-[40px] p-12 shadow-2xl border-2 border-slate-100 mb-8 text-center relative overflow-hidden">
              {metadata.image_url && <img src={metadata.image_url} alt="icon" className="w-20 h-20 mx-auto mb-8 object-contain" />}
-             <h3 className={cn("font-black text-slate-800 leading-tight", isArabicPrompt ? "text-arabic text-5xl" : "text-3xl")}>
+             <h3 className={cn("font-black text-slate-800 leading-tight", isArabicPrompt ? "text-arabic text-[32px]" : "text-4xl")}>
                 {prompt}
              </h3>
-             {isArabicPrompt && currentQuestion.transliteration && (
-               <p className="mt-4 text-slate-400 font-bold italic tracking-tight">{currentQuestion.transliteration}</p>
-             )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {allOptions.map((opt, i) => {
+            {allMultipleChoiceOptions.map((opt, i) => {
               const isCorrectOpt = opt === answer;
               const isSelected = feedback && isCorrectOpt;
-              const isWrongSelected = feedback === 'wrong' && !isCorrectOpt; // Not quite right logic but feedback handles it
+              const isWrongSelected = feedback === 'wrong' && !isCorrectOpt; 
 
               return (
                 <button
@@ -195,6 +216,7 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
                     !feedback ? "bg-white border-slate-100 hover:border-indigo-500 hover:shadow-xl hover:scale-[1.02]" : 
                     isCorrectOpt ? "bg-emerald-50 border-emerald-500 text-emerald-900" : "bg-white border-slate-50 opacity-50 text-slate-400"
                   )}
+                  dir={isArabicOptions ? "rtl" : "ltr"}
                 >
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-black",
@@ -203,7 +225,7 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
                   )}>
                     {String.fromCharCode(65 + i)}
                   </div>
-                  <span className={cn("flex-1 font-bold", isArabicOptions ? "text-arabic text-3xl" : "text-lg")}>
+                  <span className={cn("flex-1 font-bold", isArabicOptions ? "text-arabic text-[28px]" : "text-lg")}>
                     {opt}
                   </span>
                 </button>
@@ -220,6 +242,7 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
   const renderSummary = () => {
     const score = results.filter(r => r.isCorrect).length;
     const accuracy = Math.round((score / results.length) * 100);
+    const masteryPercentage = topicStats.total > 0 ? Math.round((topicStats.mastered / topicStats.total) * 100) : 0;
 
     return (
       <motion.div 
@@ -233,7 +256,7 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
         <h2 className="text-4xl font-black text-slate-800 mb-2">Sesi Tamat!</h2>
         <p className="text-slate-500 font-bold mb-10 italic">Hebat! Anda telah menyelesaikan semua soalan.</p>
 
-        <div className="grid grid-cols-2 gap-4 mb-10">
+        <div className="grid grid-cols-2 gap-4 mb-6">
            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Betul</p>
               <p className="text-3xl font-black text-emerald-500">{score}/{results.length}</p>
@@ -242,6 +265,23 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Akurasi</p>
               <p className="text-3xl font-black text-indigo-600">{accuracy}%</p>
            </div>
+        </div>
+
+        <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 mb-10">
+           <div className="flex justify-between items-center mb-2">
+             <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Masteri Topik</p>
+             <p className="text-xl font-black text-emerald-700">{masteryPercentage}%</p>
+           </div>
+           <div className="w-full h-3 bg-white rounded-full overflow-hidden border border-emerald-100">
+             <motion.div 
+               initial={{ width: 0 }}
+               animate={{ width: `${masteryPercentage}%` }}
+               className="h-full bg-emerald-500"
+             />
+           </div>
+           <p className="text-[10px] text-emerald-600/70 font-bold mt-2 italic">
+              {topicStats.mastered} daripada {topicStats.total} perkataan dikuasai
+           </p>
         </div>
 
         <div className="space-y-3">
@@ -308,17 +348,33 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
 
         {/* Feedback Overlay */}
         <AnimatePresence>
-          {feedback && (
+          {(feedback || isMastered) && (
             <motion.div 
               initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 1.5, opacity: 0 }}
               className={cn(
                 "fixed inset-0 z-[100] flex items-center justify-center pointer-events-none",
+                isMastered ? "bg-amber-500/10" : 
                 feedback === 'correct' ? "bg-emerald-500/10" : "bg-rose-500/10"
               )}
             >
-              {feedback === 'correct' ? (
+              {isMastered ? (
+                <div className="p-8 bg-white/90 backdrop-blur-md rounded-[40px] shadow-2xl flex items-center gap-6 border-4 border-amber-400">
+                  <div className="relative">
+                    <Trophy className="w-20 h-20 text-amber-500" />
+                    <motion.div 
+                      animate={{ scale: [1, 1.5, 1], opacity: [0, 1, 0] }}
+                      transition={{ repeat: Infinity, duration: 1 }}
+                      className="absolute inset-0 bg-amber-400 rounded-full blur-xl"
+                    />
+                  </div>
+                  <div>
+                    <h2 className="text-4xl font-black text-amber-600 tracking-tight">Dikuasai!</h2>
+                    <p className="text-amber-800 font-bold uppercase text-xs tracking-widest mt-1">Mastery Tahap 1 Dicapai</p>
+                  </div>
+                </div>
+              ) : feedback === 'correct' ? (
                 <div className="p-8 bg-white/90 backdrop-blur-md rounded-[40px] shadow-2xl flex items-center gap-6">
                   <CheckCircle2 className="w-20 h-20 text-emerald-500" />
                   <div>

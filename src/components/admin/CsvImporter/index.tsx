@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { VocabRow } from '../../../lib/questionGenerator';
+import { Question } from '../../../lib/supabase';
 import Step1Upload from './Step1Upload';
 import Step2IconChoice from './Step2IconChoice';
 import Step3IconResolution from './Step3IconResolution';
@@ -8,18 +9,18 @@ import Step4ReviewSave from './Step4ReviewSave';
 
 interface CsvImporterProps {
   onClose: () => void;
-  onSave: (vocab: VocabRow[], withIcons: boolean) => void;
-  onAutoGenerate: (vocab: VocabRow[]) => void;
+  onSave: (vocab: VocabRow[], questions: Partial<Question>[], withIcons: boolean) => void;
+  topicId: string;
+  userId: string;
 }
 
 type ImportStep = 1 | 2 | 3 | 4;
 
-export default function CsvImporter({ onClose, onSave, onAutoGenerate }: CsvImporterProps) {
+export default function CsvImporter({ onClose, onSave, topicId, userId }: CsvImporterProps) {
   const [step, setStep] = useState<ImportStep>(1);
   const [data, setData] = useState<VocabRow[]>([]);
   const [useIcons, setUseIcons] = useState(false);
   const [resolvedData, setResolvedData] = useState<VocabRow[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleStep1Next = (uploadedData: VocabRow[]) => {
     setData(uploadedData);
@@ -41,17 +42,8 @@ export default function CsvImporter({ onClose, onSave, onAutoGenerate }: CsvImpo
     setStep(4);
   };
 
-  const handleSaveOnly = (finalData: VocabRow[]) => {
-    onSave(finalData, useIcons);
-  };
-
-  const handleSaveAndGenerate = async (finalData: VocabRow[]) => {
-    setIsGenerating(true);
-    // First save the cards
-    await onSave(finalData, useIcons);
-    // Then generate MCQs
-    await onAutoGenerate(finalData);
-    setIsGenerating(false);
+  const handleFinalSave = (finalVocab: VocabRow[], finalQuestions: Partial<Question>[]) => {
+    onSave(finalVocab, finalQuestions, useIcons);
   };
 
   return (
@@ -91,10 +83,10 @@ export default function CsvImporter({ onClose, onSave, onAutoGenerate }: CsvImpo
               <motion.div key="s4" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
                 <Step4ReviewSave 
                   data={resolvedData} 
-                  onSave={handleSaveOnly} 
-                  onAutoGenerate={handleSaveAndGenerate} 
+                  topicId={topicId}
+                  userId={userId}
+                  onSave={handleFinalSave} 
                   onBack={() => setStep(useIcons ? 3 : 2)} 
-                  isGenerating={isGenerating}
                 />
               </motion.div>
             )}

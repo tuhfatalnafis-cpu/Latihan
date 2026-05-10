@@ -55,6 +55,16 @@ export const db = {
       if (error) throw error;
       return data as Subject;
     },
+    async update(id: string, updates: Partial<Subject>) {
+      const { data, error } = await supabase
+        .from('subjects')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Subject;
+    },
     async delete(id: string) {
       const { error } = await supabase
         .from('subjects')
@@ -89,6 +99,16 @@ export const db = {
         .delete()
         .eq('id', id);
       if (error) throw error;
+    },
+    async update(id: string, updates: Partial<Syllabus>) {
+      const { data, error } = await supabase
+        .from('syllabi')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Syllabus;
     }
   },
 
@@ -111,6 +131,16 @@ export const db = {
       if (error) throw error;
       return data as Topic;
     },
+    async update(id: string, updates: Partial<Topic>) {
+      const { data, error } = await supabase
+        .from('topics')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Topic;
+    },
     async delete(id: string) {
       const { error } = await supabase
         .from('topics')
@@ -124,10 +154,81 @@ export const db = {
         .update({ order_index: orderIndex })
         .eq('id', id);
       if (error) throw error;
+    },
+    async getStats(id: string, studentId: string) {
+      // Get total questions
+      const { count: total, error: countError } = await supabase
+        .from('questions')
+        .select('*', { count: 'exact', head: true })
+        .eq('topic_id', id);
+      
+      if (countError) throw countError;
+
+      // Get mastered questions (consecutive_correct >= 3)
+      const { data: progress, error: progressError } = await supabase
+        .from('progress')
+        .select('*, questions!inner(*)')
+        .eq('student_id', studentId)
+        .eq('questions.topic_id', id)
+        .gte('consecutive_correct', 3);
+
+      if (progressError) throw progressError;
+
+      return {
+        total: total || 0,
+        mastered: progress?.length || 0
+      };
+    }
+  },
+
+  vocabulary: {
+    async listForTopic(topicId: string) {
+      const { data, error } = await supabase
+        .from('vocabulary')
+        .select('*')
+        .eq('topic_id', topicId)
+        .order('created_at');
+      if (error) throw error;
+      return data;
+    },
+    async create(vocab: any) {
+      const { data, error } = await supabase
+        .from('vocabulary')
+        .insert([vocab])
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async batchCreate(vocabs: any[]) {
+      const { data, error } = await supabase
+        .from('vocabulary')
+        .insert(vocabs)
+        .select();
+      if (error) throw error;
+      return data;
+    },
+    async update(id: string, updates: any) {
+      const { data, error } = await supabase
+        .from('vocabulary')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async delete(id: string) {
+      const { error } = await supabase
+        .from('vocabulary')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
     }
   },
 
   questions: {
+
     async listForTopic(topicId: string) {
       const { data, error } = await supabase
         .from('questions')
@@ -161,6 +262,13 @@ export const db = {
         .from('attempts')
         .insert([attempt]);
       if (error) throw error;
+    },
+    async deleteForQuestion(questionId: string) {
+      const { error } = await supabase
+        .from('attempts')
+        .delete()
+        .eq('question_id', questionId);
+      if (error) throw error;
     }
   },
 
@@ -193,6 +301,21 @@ export const db = {
         .limit(limit);
       if (error) throw error;
       return data;
+    },
+    async listForUser(studentId: string) {
+      const { data, error } = await supabase
+        .from('progress')
+        .select('*, questions(topic_id)')
+        .eq('student_id', studentId);
+      if (error) throw error;
+      return data;
+    },
+    async deleteForQuestion(questionId: string) {
+      const { error } = await supabase
+        .from('progress')
+        .delete()
+        .eq('question_id', questionId);
+      if (error) throw error;
     }
   }
 };

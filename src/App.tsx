@@ -5,6 +5,7 @@ import AuthScreen from './components/AuthScreen';
 import AdminDashboard from './components/admin/AdminDashboard';
 import StudentDashboard from './components/student/StudentDashboard';
 import { Loader2 } from 'lucide-react';
+import { Toaster } from 'sonner';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -117,6 +118,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <Toaster position="top-center" richColors />
       {user.role === 'admin' ? (
         <AdminDashboard user={user} onLogout={handleLogout} />
       ) : (

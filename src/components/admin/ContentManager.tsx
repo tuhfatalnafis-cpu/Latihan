@@ -9,14 +9,18 @@ import {
   Edit2,
   Loader2,
   ArrowLeft,
-  MoreVertical
+  MoreVertical,
+  CheckCircle2
 } from 'lucide-react';
 import { db } from '../../lib/db';
 import { Subject, Syllabus, Topic } from '../../lib/supabase';
 import { User } from '../../types';
 import { cn } from '../../lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import TopicDetail from './TopicDetail';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import { toast } from 'sonner';
+import { supabase } from '../../lib/supabase';
 
 interface ContentManagerProps {
   user: User;
@@ -36,6 +40,22 @@ export default function ContentManager({ user }: ContentManagerProps) {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
+
+  // Confirmation state
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string | React.ReactNode;
+    onConfirm: () => void;
+    id: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    id: ''
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -79,16 +99,105 @@ export default function ContentManager({ user }: ContentManagerProps) {
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('Adakah anda pasti? Semua kandungan di bawahnya akan dipadamkan.')) return;
+  const [editingItem, setEditingItem] = useState<{ id: string, name: string } | null>(null);
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem || !editingItem.name.trim()) return;
     try {
-      if (view.type === 'subjects') await db.subjects.delete(id);
-      else if (view.type === 'syllabi') await db.syllabi.delete(id);
-      else if (view.type === 'topics') await db.topics.delete(id);
+      if (view.type === 'subjects') await db.subjects.update(editingItem.id, { name: editingItem.name });
+      else if (view.type === 'syllabi') await db.syllabi.update(editingItem.id, { name: editingItem.name });
+      setEditingItem(null);
       fetchData();
     } catch (err) {
-      alert('Gagal memadam: ' + (err as any).message);
+      alert('Gagal mengemaskini.');
+    }
+  };
+
+  const handleDeleteClick = async (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    setLoading(true);
+    try {
+      let message = '';
+      let title = '';
+
+      if (view.type === 'subjects') {
+        const { data: syData } = await supabase.from('syllabi').select('id').eq('subject_id', id);
+        const syIds = syData?.map(s => s.id) || [];
+        
+        let topIds: string[] = [];
+        if (syIds.length > 0) {
+          const { data: topData } = await supabase.from('topics').select('id').in('syllabus_id', syIds);
+          topIds = topData?.map(t => t.id) || [];
+        }
+
+        let qCount = 0;
+        if (topIds.length > 0) {
+          const { count } = await supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', topIds);
+          qCount = count || 0;
+        }
+
+        title = `Padam subjek '${name}'?`;
+        message = `Ini akan turut memadam:\n• ${syIds.length} silibus\n• ${topIds.length} topik\n• ${qCount} soalan\n• Semua kemajuan pelajar berkaitan\n\nTindakan ini tidak boleh dibuat asal.`;
+      } else if (view.type === 'syllabi') {
+        const { data: topData } = await supabase.from('topics').select('id').eq('syllabus_id', id);
+        const topIds = topData?.map(t => t.id) || [];
+
+        let qCount = 0;
+        if (topIds.length > 0) {
+          const { count } = await supabase.from('questions').select('*', { count: 'exact', head: true }).in('topic_id', topIds);
+          qCount = count || 0;
+        }
+
+        title = `Padam silibus '${name}'?`;
+        message = `Ini akan turut memadam:\n• ${topIds.length} topik\n• ${qCount} soalan\n• Semua kemajuan pelajar berkaitan\n\nTindakan ini tidak boleh dibuat asal.`;
+      } else if (view.type === 'topics') {
+        const { count: qCount } = await supabase.from('questions').select('*', { count: 'exact', head: true }).eq('topic_id', id);
+
+        title = `Padam topik '${name}'?`;
+        message = `Ini akan turut memadam:\n• ${qCount || 0} soalan\n• Semua kemajuan pelajar berkaitan\n\nTindakan ini tidak boleh dibuat asal.`;
+      }
+
+      setConfirmState({
+        isOpen: true,
+        id,
+        title,
+        message,
+        onConfirm: () => execDelete(id),
+      });
+    } catch (err) {
+      toast.error('Gagal memuatkan maklumat pandaman.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const execDelete = async (id: string) => {
+    setIsDeleting(true);
+    try {
+      let error;
+      if (view.type === 'subjects') {
+        const res = await supabase.from('subjects').delete().eq('id', id);
+        error = res.error;
+      } else if (view.type === 'syllabi') {
+        const res = await supabase.from('syllabi').delete().eq('id', id);
+        error = res.error;
+      } else if (view.type === 'topics') {
+        const res = await supabase.from('topics').delete().eq('id', id);
+        error = res.error;
+      }
+
+      if (error) throw error;
+
+      toast.success('Berjaya dipadam');
+      setConfirmState(prev => ({ ...prev, isOpen: false }));
+      fetchData();
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      toast.error(`Gagal memadam: ${err.message || 'Ralat tidak diketahui'}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -124,6 +233,14 @@ export default function ContentManager({ user }: ContentManagerProps) {
         user={user} 
         topic={view.topic} 
         onBack={() => setView({ type: 'topics', subject: view.subject, syllabus: view.syllabus })} 
+        onUpdate={(updatedTopic) => {
+          setView({ ...view, topic: updatedTopic });
+          fetchData();
+        }}
+        onDelete={() => {
+          fetchData();
+          setView({ type: 'topics', subject: view.subject, syllabus: view.syllabus });
+        }}
         breadcrumbs={renderBreadcrumbs()}
       />
     );
@@ -172,15 +289,38 @@ export default function ContentManager({ user }: ContentManagerProps) {
               <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform">
                 <BookOpen className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">{s.name}</h3>
-              <p className="text-slate-400 font-medium text-sm">Klik untuk urus silibus subjek ini.</p>
               
-              <button 
-                onClick={(e) => handleDelete(s.id, e)}
-                className="absolute top-6 right-6 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+              {editingItem?.id === s.id ? (
+                <form onClick={e => e.stopPropagation()} onSubmit={handleUpdate} className="flex gap-2">
+                   <input 
+                     value={editingItem.name}
+                     onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
+                     className="w-full px-4 py-2 border-2 border-indigo-100 rounded-xl outline-none focus:border-indigo-500 font-bold"
+                     autoFocus
+                   />
+                   <button type="submit" className="p-2 bg-indigo-600 text-white rounded-xl"><CheckCircle2 className="w-5 h-5" /></button>
+                </form>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">{s.name}</h3>
+                  <p className="text-slate-400 font-medium text-sm">Klik untuk urus silibus subjek ini.</p>
+                </>
+              )}
+              
+              <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setEditingItem({ id: s.id, name: s.name }); }}
+                  className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={(e) => handleDeleteClick(s.id, s.name, e)}
+                  className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
 
@@ -193,15 +333,38 @@ export default function ContentManager({ user }: ContentManagerProps) {
               <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform">
                 <FileText className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">{s.name}</h3>
-              <p className="text-slate-400 font-medium text-sm">Tahun / Gred / Tahap silibus.</p>
               
-              <button 
-                onClick={(e) => handleDelete(s.id, e)}
-                className="absolute top-6 right-6 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+              {editingItem?.id === s.id ? (
+                <form onClick={e => e.stopPropagation()} onSubmit={handleUpdate} className="flex gap-2">
+                   <input 
+                     value={editingItem.name}
+                     onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
+                     className="w-full px-4 py-2 border-2 border-indigo-100 rounded-xl outline-none focus:border-indigo-500 font-bold"
+                     autoFocus
+                   />
+                   <button type="submit" className="p-2 bg-indigo-600 text-white rounded-xl"><CheckCircle2 className="w-5 h-5" /></button>
+                </form>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">{s.name}</h3>
+                  <p className="text-slate-400 font-medium text-sm">Tahun / Gred / Tahap silibus.</p>
+                </>
+              )}
+              
+              <div className="absolute top-6 right-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setEditingItem({ id: s.id, name: s.name }); }}
+                  className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={(e) => handleDeleteClick(s.id, s.name, e)}
+                  className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
 
@@ -218,7 +381,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
               <p className="text-slate-400 font-medium text-sm">Urus kad hafalan dan soalan topik ini.</p>
               
               <button 
-                onClick={(e) => handleDelete(t.id, e)}
+                onClick={(e) => handleDeleteClick(t.id, t.name, e)}
                 className="absolute top-6 right-6 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
               >
                 <Trash2 className="w-5 h-5" />
@@ -244,7 +407,14 @@ export default function ContentManager({ user }: ContentManagerProps) {
         </div>
       )}
 
-      {/* Add Modal */}
+      <ConfirmDialog 
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        isLoading={isDeleting}
+      />
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
           <motion.div 
