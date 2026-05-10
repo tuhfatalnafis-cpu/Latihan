@@ -31,12 +31,13 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 interface StudySessionProps {
   user: User;
   topic: Topic;
+  setName?: string;
   onClose: () => void;
 }
 
 type SessionMode = 'srs' | 'browse';
 
-export default function StudySession({ user, topic, onClose }: StudySessionProps) {
+export default function StudySession({ user, topic, setName, onClose }: StudySessionProps) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [results, setResults] = useState<{questionId: string, isCorrect: boolean}[]>([]);
@@ -84,7 +85,11 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
     try {
       if (mode === 'browse') {
         const data = await db.questions.listForTopic(topic.id);
-        setQuestions(data.sort(() => Math.random() - 0.5));
+        let filtered = data;
+        if (setName) {
+          filtered = data.filter(q => (q.metadata as any)?.set_name === setName);
+        }
+        setQuestions(filtered.sort(() => Math.random() - 0.5));
       } else {
         const due = await db.progress.getDue(user.id);
         const filtered = due.filter((p: any) => p.questions.topic_id === topic.id).map((p: any) => p.questions);

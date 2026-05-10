@@ -26,17 +26,37 @@ export default function VocabImporter({ topicId, onClose, onComplete }: VocabImp
   const handleSave = async (finalData: Partial<VocabRow>[]) => {
     setSaving(true);
     try {
-      const vocabToInsert = finalData.map(v => ({
-        topic_id: topicId,
-        arabic: v.arabic || '',
-        meaning_ms: v.meaning_ms || '',
-        transliteration: v.transliteration || '',
-        image_keyword: v.image_keyword || '',
-        metadata: { imported_at: new Date().toISOString() }
-      }));
+      // Fetch existing vocab for this topic to check for duplicates
+      const existingVocab = await db.vocabulary.listForTopic(topicId);
+      const existingEntries = new Set(existingVocab.map((v: any) => `${v.arabic}|${v.meaning_ms}`));
 
-      await db.vocabulary.batchCreate(vocabToInsert);
-      toast.success(`Berjaya mengimport ${vocabToInsert.length} perkataan!`);
+      const vocabToInsert = finalData
+        .filter(v => {
+          const key = `${v.arabic || ''}|${v.meaning_ms || ''}`;
+          return !existingEntries.has(key);
+        })
+        .map(v => ({
+          topic_id: topicId,
+          arabic: v.arabic || '',
+          meaning_ms: v.meaning_ms || '',
+          transliteration: v.transliteration || '',
+          image_keyword: v.image_keyword || '',
+          metadata: { imported_at: new Date().toISOString() }
+        }));
+
+      if (vocabToInsert.length > 0) {
+        await db.vocabulary.batchCreate(vocabToInsert);
+      }
+      
+      const skippedCount = finalData.length - vocabToInsert.length;
+      if (skippedCount > 0 && vocabToInsert.length > 0) {
+        toast.success(`Berjaya mengimport ${vocabToInsert.length} perkataan! (${skippedCount} perkataan sedia ada dilangkau)`);
+      } else if (vocabToInsert.length > 0) {
+        toast.success(`Berjaya mengimport ${vocabToInsert.length} perkataan!`);
+      } else {
+        toast.info('Semua perkataan sudah wujud dalam topik ini.');
+      }
+      
       onComplete();
       onClose();
     } catch (err: any) {

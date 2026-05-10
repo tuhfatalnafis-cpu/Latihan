@@ -43,7 +43,8 @@ type ViewState =
   | { type: 'browse_subjects' }
   | { type: 'browse_syllabi', subject: Subject }
   | { type: 'browse_topics', subject: Subject, syllabus: Syllabus }
-  | { type: 'study', topic: Topic, subject: Subject, syllabus: Syllabus };
+  | { type: 'browse_sets', subject: Subject, syllabus: Syllabus, topic: Topic, sets: string[] }
+  | { type: 'study', topic: Topic, subject: Subject, syllabus: Syllabus, setName?: string };
 
 export default function StudentDashboard({ user, onLogout }: StudentDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabState>('dashboard');
@@ -247,11 +248,89 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     </div>
   );
 
+  const handleTopicClick = async (topic: Topic) => {
+    try {
+      const questions = await db.questions.listForTopic(topic.id);
+      const uniqueSets = Array.from(new Set(questions.map(q => (q.metadata as any)?.set_name || 'Tanpa Nama Set')));
+      
+      if (uniqueSets.length > 1) {
+        setView({ 
+          type: 'browse_sets', 
+          subject: (view as any).subject, 
+          syllabus: (view as any).syllabus, 
+          topic, 
+          sets: uniqueSets 
+        });
+      } else {
+        setView({ 
+          type: 'study', 
+          topic, 
+          subject: (view as any).subject, 
+          syllabus: (view as any).syllabus,
+          setName: uniqueSets[0] === 'Tanpa Nama Set' ? undefined : uniqueSets[0]
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const renderSets = () => {
+    if (view.type !== 'browse_sets') return null;
+    const { topic, sets } = view;
+    
+    return (
+      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex items-center justify-between">
+          <h3 className="text-2xl font-black text-ink tracking-tight">Pilih Set Latihan</h3>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setView({ type: 'browse_topics', subject: view.subject, syllabus: view.syllabus })}
+            className="text-ink-muted font-bold"
+          >
+            <ChevronRight className="w-4 h-4 rotate-180 mr-2" /> Kembali
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          {sets.map((setName, idx) => (
+            <Card 
+              key={setName}
+              variant="white"
+              className="flex items-center justify-between group cursor-pointer border-2 border-slate-50 hover:border-primary/20"
+              onClick={() => setView({ 
+                type: 'study', 
+                topic, 
+                subject: view.subject, 
+                syllabus: view.syllabus,
+                setName: setName === 'Tanpa Nama Set' ? undefined : setName
+              })}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-primary/10 text-primary rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-soft">
+                  <Sparkles className="w-7 h-7" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-lg text-ink leading-tight">{setName}</h4>
+                  <p className="text-xs font-bold text-ink-muted mt-1 uppercase tracking-widest">Sesi Hafalan {idx + 1}</p>
+                </div>
+              </div>
+              <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-ink-muted group-hover:bg-primary group-hover:text-white transition-all">
+                <ArrowRight className="w-5 h-5" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderSubjects = () => (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-black text-ink tracking-tight">
-          {view.type === 'browse_subjects' ? 'Pilih Subjek' : view.type === 'browse_syllabi' ? view.subject.name : view.syllabus.name}
+          {view.type === 'browse_subjects' ? 'Pilih Subjek' : view.type === 'browse_syllabi' ? view.subject.name : view.type === 'browse_topics' ? view.syllabus.name : 'Pilih Set'}
         </h3>
         {view.type !== 'browse_subjects' && (
           <Button 
@@ -260,6 +339,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
             onClick={() => {
               if (view.type === 'browse_syllabi') setView({ type: 'browse_subjects' });
               else if (view.type === 'browse_topics') setView({ type: 'browse_syllabi', subject: (view as any).subject });
+              else if (view.type === 'browse_sets') setView({ type: 'browse_topics', subject: view.subject, syllabus: view.syllabus });
             }}
             className="text-ink-muted font-bold"
           >
@@ -319,7 +399,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                 key={t.id} 
                 variant="white"
                 className="col-span-full cursor-pointer group active:scale-95 border-2 border-slate-50 hover:border-primary/20"
-                onClick={() => setView({ type: 'study', topic: t, subject: (view as any).subject, syllabus: (view as any).syllabus })}
+                onClick={() => handleTopicClick(t)}
               >
                 <div className="flex items-center justify-between mb-6">
                   <div className="w-14 h-14 bg-accent-mint/10 text-accent-mint rounded-[1.2rem] flex items-center justify-center group-hover:scale-110 transition-transform shadow-soft">
@@ -342,6 +422,8 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               </Card>
             );
           })}
+
+          {view.type === 'browse_sets' && renderSets()}
         </div>
       )}
     </div>
@@ -450,6 +532,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       <StudySession 
         user={user} 
         topic={view.topic} 
+        setName={view.setName}
         onClose={() => setView({ type: 'browse_topics', subject: (view as any).subject, syllabus: (view as any).syllabus })} 
       />
     );
