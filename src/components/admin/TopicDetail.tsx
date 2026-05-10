@@ -336,8 +336,7 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                 </div>
                 <Button 
                   onClick={() => setShowGenerator(true)}
-                  disabled={vocabulary.length < 4}
-                  className="w-full md:w-auto px-10 py-5 h-auto bg-accent-mint hover:bg-accent-mint/90 border-transparent text-emerald-900 rounded-[1.5rem] font-black shadow-soft transition-all flex items-center justify-center gap-3 disabled:grayscale disabled:opacity-50"
+                  className="w-full md:w-auto px-10 py-5 h-auto bg-accent-mint hover:bg-accent-mint/90 border-transparent text-emerald-900 rounded-[1.5rem] font-black shadow-soft transition-all flex items-center justify-center gap-3"
                 >
                   <BrainCircuit className="w-6 h-6" /> Jana Set Latihan
                 </Button>
@@ -417,7 +416,7 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                      <BrainCircuit className="w-12 h-12 text-ink-muted" />
                    </div>
                    <h3 className="text-3xl font-black text-ink">Tiada Set Latihan</h3>
-                   <p className="text-ink-muted max-w-sm mt-3 font-bold">Gunakan perpustakaan kosa kata untuk menjana set soalan hafalan AI secara automatik.</p>
+                   <p className="text-ink-muted max-w-sm mt-3 font-bold">Gunakan perpustakaan kosa kata atau jana soalan terus menggunakan AI Pintar tanpa fail CSV.</p>
                 </Card>
               ) : (
                 <div className="space-y-6">

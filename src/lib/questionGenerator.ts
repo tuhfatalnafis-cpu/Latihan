@@ -23,7 +23,7 @@ export interface GeneratedMCQ {
   answer: string;
   distractors: [string, string, string];
   direction: 'ar_to_ms' | 'ms_to_ar';
-  source_vocab_id: string;
+  source_vocab_id?: string;
   metadata: { 
     image_keyword?: string;
     transliteration?: string;

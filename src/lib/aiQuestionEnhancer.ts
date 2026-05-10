@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { GeneratedMCQ, VocabRow } from "./questionGenerator";
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -10,9 +10,8 @@ export async function enhanceDistractors(
   if (!API_KEY) return null;
 
   try {
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    
     // Pick a pool of candidates from the library (same direction)
     const directionPool = library
       .map(v => (question.direction === 'ar_to_ms' ? v.meaning_ms : v.arabic))
@@ -22,21 +21,36 @@ export async function enhanceDistractors(
     const shuffled = [...new Set(directionPool)].sort(() => Math.random() - 0.5);
     const candidates = shuffled.slice(0, 15);
 
-    const prompt = `Saya sedang membina soalan aneka pilihan untuk pelajar Bahasa Arab. 
+    const promptText = `Saya sedang membina soalan aneka pilihan untuk pelajar Bahasa Arab. 
 Soalan: '${question.prompt}'. 
 Jawapan betul: '${question.answer}'. 
 Berikut adalah senarai calon distraktor: ${candidates.join(', ')}. 
 
-Pilih 3 distraktor yang PALING dekat secara makna dengan jawapan betul tetapi tetap salah. 
-Kembalikan JSON sahaja, format: {"distractors": ["...", "...", "..."]}`;
+Pilih 3 distraktor yang PALING dekat secara makna dengan jawapan betul tetapi tetap salah.`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
-    // Clean JSON markdown
-    const jsonStr = text.replace(/```json|```/gi, '').trim();
-    const data = JSON.parse(jsonStr);
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: promptText,
+      config: {
+        systemInstruction: "Anda adalah pakar bahasa Arab. Kembalikan jawapan dalam format JSON sahaja: {\"distractors\": [\"...\", \"...\", \"...\"]}",
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.LOW
+        },
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            distractors: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ["distractors"]
+        }
+      }
+    });
+
+    const data = JSON.parse(response.text);
 
     if (data.distractors && Array.isArray(data.distractors) && data.distractors.length === 3) {
       return data.distractors;

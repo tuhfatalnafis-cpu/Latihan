@@ -4,6 +4,7 @@ import { X, BrainCircuit, Loader2 } from 'lucide-react';
 import GenerationConfig from './GenerationConfig';
 import GenerationPreview from './GenerationPreview';
 import { VocabRow, GenConfig, GeneratedMCQ, generateMCQs } from '../../../lib/questionGenerator';
+import { generateQuestionsFromPrompt } from '../../../lib/aiQuestionService';
 import { enhanceDistractors } from '../../../lib/aiQuestionEnhancer';
 import { db } from '../../../lib/db';
 import { toast } from 'sonner';
@@ -18,16 +19,33 @@ interface QuestionGeneratorProps {
 
 export default function QuestionGenerator({ topicId, userId, library, onClose, onComplete }: QuestionGeneratorProps) {
   const [step, setStep] = useState(1);
-  const [config, setConfig] = useState<{ name: string; strategy: 'random' | 'ai' } & GenConfig | null>(null);
+  const [config, setConfig] = useState<{ name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string } & GenConfig | null>(null);
   const [questions, setQuestions] = useState<GeneratedMCQ[]>([]);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhanceProgress, setEnhanceProgress] = useState(0);
 
-  const handleConfigComplete = async (newConfig: { name: string; strategy: 'random' | 'ai' } & GenConfig) => {
+  const handleConfigComplete = async (newConfig: { name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string } & GenConfig) => {
     setConfig(newConfig);
+    setStep(2);
+    
+    if (newConfig.strategy === 'pure_ai') {
+      setIsEnhancing(true);
+      setEnhanceProgress(10);
+      try {
+        const aiQuestions = await generateQuestionsFromPrompt(newConfig.prompt || '', newConfig.count);
+        setQuestions(aiQuestions);
+      } catch (err: any) {
+        toast.error('Gagal menjana soalan AI: ' + err.message);
+        setStep(1);
+      } finally {
+        setIsEnhancing(false);
+        setEnhanceProgress(100);
+      }
+      return;
+    }
+
     const initialQuestions = generateMCQs(library, newConfig);
     setQuestions(initialQuestions);
-    setStep(2);
 
     if (newConfig.strategy === 'ai') {
       setIsEnhancing(true);
@@ -61,7 +79,7 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
         metadata: {
           set_name: config.name,
           direction: q.direction,
-          generation_method: config.strategy === 'ai' ? 'ai_enhanced' : 'random',
+          generation_method: config.strategy === 'pure_ai' ? 'pure_ai' : (config.strategy === 'ai' ? 'ai_enhanced' : 'random'),
           source_vocab_id: q.source_vocab_id,
           image_keyword: q.metadata.image_keyword,
           transliteration: q.metadata.transliteration
