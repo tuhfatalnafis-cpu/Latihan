@@ -5,8 +5,8 @@ const getVal = (v: any) => (typeof v === 'string' ? v : '');
 // Safer access to environment variables to avoid ReferenceError in some environments
 const env = typeof process !== 'undefined' ? process.env : (import.meta as any).env;
 
-const supabaseUrl = ((import.meta as any).env.VITE_SUPABASE_URL || '').trim();
-const supabaseAnonKey = ((import.meta as any).env.VITE_SUPABASE_ANON_KEY || '').trim();
+const supabaseUrl = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim();
+const supabaseAnonKey = (process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase configuration missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in project settings.');
