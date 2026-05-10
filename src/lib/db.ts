@@ -247,6 +247,14 @@ export const db = {
       if (error) throw error;
       return data as Question;
     },
+    async batchCreate(questions: Partial<Question>[]) {
+      const { data, error } = await supabase
+        .from('questions')
+        .insert(questions)
+        .select();
+      if (error) throw error;
+      return data as Question[];
+    },
     async delete(id: string) {
       const { error } = await supabase
         .from('questions')

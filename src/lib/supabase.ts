@@ -81,6 +81,7 @@ export interface Question {
     image_url?: string;
     image_keyword?: string;
     direction?: 'ar_to_ms' | 'ms_to_ar';
+    pairs?: { left: string; right: string }[];
   };
   created_by: string;
   created_at: string;

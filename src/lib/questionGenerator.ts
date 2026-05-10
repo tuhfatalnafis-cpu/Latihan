@@ -1,109 +1,107 @@
-import { Question, QuestionType } from './supabase';
+import { Question } from './supabase';
 
 /**
  * Deterministic question generator for vocab.
- * Generates MCQs from word pairs.
+ * Pure functions, no side effects.
  */
 
 export interface VocabRow {
+  id?: string;
   arabic: string;
-  transliteration: string;
-  meaning_en?: string;
   meaning_ms: string;
+  transliteration?: string;
   image_keyword?: string;
 }
 
-const pickRandom = (pool: string[], count: number, exclude: string[]): string[] => {
-  const filtered = pool.filter(item => !exclude.includes(item));
-  const shuffled = [...filtered].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-};
+export interface GenConfig {
+  count: number;
+  direction: 'ar_to_ms' | 'ms_to_ar' | 'both';
+}
 
-/**
- * Shuffles an array and returns a new one.
- */
-const shuffleArray = <T>(array: T[]): T[] => {
+export interface GeneratedMCQ {
+  prompt: string;
+  answer: string;
+  distractors: [string, string, string];
+  direction: 'ar_to_ms' | 'ms_to_ar';
+  source_vocab_id: string;
+  metadata: { 
+    image_keyword?: string;
+    transliteration?: string;
+  };
+}
+
+const shuffleArray = <T,>(array: T[]): T[] => {
   return [...array].sort(() => Math.random() - 0.5);
 };
 
-export const generateMcqsFromVocab = (
-  topicId: string,
-  vocab: VocabRow[],
-  userId: string,
-  limit: number = 20
-): Partial<Question>[] => {
-  const questions: Partial<Question>[] = [];
-  const arabicPool = vocab.map(v => v.arabic);
-  const meaningPool = vocab.map(v => v.meaning_ms);
-
-  // We want to generate Shape A (Ar -> Ms) and Shape B (Ms -> Ar)
-  // Shuffling the vocab first ensures variety if we hit the limit early
-  const shuffledVocab = shuffleArray(vocab);
+const pickDistractors = (pool: string[], answer: string): [string, string, string] => {
+  const filtered = pool.filter(item => item !== answer);
+  const shuffled = shuffleArray([...new Set(filtered)]);
   
-  for (const row of shuffledVocab) {
-    if (questions.length >= limit) break;
+  if (shuffled.length < 3) {
+    // If we don't have enough variety, we might have to pad or it will be easy
+    // But per spec, library.length >= 4 ensures 3 distractors
+    return [
+      shuffled[0] || '---',
+      shuffled[1] || '---',
+      shuffled[2] || '---'
+    ];
+  }
+  
+  return [shuffled[0], shuffled[1], shuffled[2]];
+};
 
-    const distractorCount = Math.min(3, vocab.length - 1);
-    if (distractorCount < 1) continue;
-
-    // Shape A: Arabic -> Malay
-    questions.push({
-      topic_id: topicId,
-      question_type: 'multiple_choice',
-      prompt: row.arabic,
-      answer: row.meaning_ms,
-      arabic: row.arabic,
-      transliteration: row.transliteration, 
-      distractors: pickRandom(meaningPool, distractorCount, [row.meaning_ms]),
-      metadata: {
-        direction: 'ar_to_ms',
-        image_keyword: row.image_keyword
-      },
-      created_by: userId
-    });
-
-    if (questions.length >= limit) break;
-
-    // Shape B: Malay -> Arabic
-    questions.push({
-      topic_id: topicId,
-      question_type: 'multiple_choice',
-      prompt: row.meaning_ms,
-      answer: row.arabic,
-      arabic: row.arabic,
-      transliteration: row.transliteration,
-      distractors: pickRandom(arabicPool, distractorCount, [row.arabic]),
-      metadata: {
-        direction: 'ms_to_ar',
-        image_keyword: row.image_keyword
-      },
-      created_by: userId
-    });
+export function generateMCQs(
+  library: VocabRow[], 
+  config: GenConfig
+): GeneratedMCQ[] {
+  if (library.length < 4) {
+    throw new Error('Pustaka kosa kata memerlukan sekurang-kurangnya 4 perkataan untuk menjana soalan.');
   }
 
-  // Final shuffle and slice to strictly honor limit
-  return shuffleArray(questions).slice(0, limit);
-};
+  const pool: { vocab: VocabRow; direction: 'ar_to_ms' | 'ms_to_ar' }[] = [];
 
-/**
- * Create flashcards from vocab.
- */
-export const generateFlashcardsFromVocab = (
-  topicId: string,
-  vocab: VocabRow[],
-  userId: string
-): Partial<Question>[] => {
-  return vocab.map(row => ({
-    topic_id: topicId,
-    question_type: 'flashcard',
-    prompt: row.meaning_ms,
-    answer: row.arabic,
-    arabic: row.arabic,
-    transliteration: row.transliteration,
-    distractors: [],
-    metadata: {
-      image_keyword: row.image_keyword
-    },
-    created_by: userId
-  }));
-};
+  library.forEach(vocab => {
+    if (config.direction === 'ar_to_ms' || config.direction === 'both') {
+      pool.push({ vocab, direction: 'ar_to_ms' });
+    }
+    if (config.direction === 'ms_to_ar' || config.direction === 'both') {
+      pool.push({ vocab, direction: 'ms_to_ar' });
+    }
+  });
+
+  const shuffledPool = shuffleArray(pool);
+  const selected = shuffledPool.slice(0, config.count);
+
+  const arabicPool = library.map(v => v.arabic);
+  const malayPool = library.map(v => v.meaning_ms);
+
+  return selected.map(entry => {
+    const { vocab, direction } = entry;
+    let prompt = '';
+    let answer = '';
+    let distractors: [string, string, string];
+
+    if (direction === 'ar_to_ms') {
+      prompt = vocab.arabic;
+      answer = vocab.meaning_ms;
+      distractors = pickDistractors(malayPool, answer);
+    } else {
+      prompt = vocab.meaning_ms;
+      answer = vocab.arabic;
+      distractors = pickDistractors(arabicPool, answer);
+    }
+
+    return {
+      prompt,
+      answer,
+      distractors,
+      direction,
+      source_vocab_id: vocab.id,
+      metadata: {
+        image_keyword: vocab.image_keyword,
+        transliteration: vocab.transliteration
+      }
+    };
+  });
+}

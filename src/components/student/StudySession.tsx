@@ -10,13 +10,19 @@ import {
   Trophy,
   Loader2,
   ChevronRight,
-  RotateCcw
+  RotateCcw,
+  LayoutDashboard
 } from 'lucide-react';
 import { db } from '../../lib/db';
 import { sm2 } from '../../lib/srs';
 import { Question, Topic, Attempt, Progress } from '../../lib/supabase';
 import { User } from '../../types';
 import { cn } from '../../lib/utils';
+import { toast } from 'sonner';
+
+const shuffleArray = <T,>(array: T[]): T[] => {
+  return [...array].sort(() => Math.random() - 0.5);
+};
 
 interface StudySessionProps {
   user: User;
@@ -236,8 +242,102 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
       );
     }
 
+    if (question_type === 'matching') {
+      const pairs = metadata.pairs || [];
+      return (
+        <MatchingView 
+          pairs={pairs} 
+          onComplete={(isCorrect) => handleAnswer(isCorrect)} 
+          direction={metadata.direction || 'ar_to_ms'}
+        />
+      );
+    }
+
     return null;
   };
+
+  /**
+   * Inner components for specific question types
+   */
+  function MatchingView({ pairs, onComplete, direction }: { pairs: {left: string, right: string}[], onComplete: (correct: boolean) => void, direction: string }) {
+    const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
+    const [matches, setMatches] = useState<Record<string, string>>({});
+    const [mistakes, setMistakes] = useState(0);
+
+    const leftItems = useMemo(() => shuffleArray(pairs.map(p => p.left)), [pairs]);
+    const rightItems = useMemo(() => shuffleArray(pairs.map(p => p.right)), [pairs]);
+
+    const handlePairClick = (item: string, side: 'left' | 'right') => {
+      if (side === 'left') {
+        if (matches[item]) return; // Already matched
+        setSelectedLeft(item === selectedLeft ? null : item);
+      } else {
+        if (!selectedLeft) return;
+        
+        // Find if it's the correct match
+        const correctPair = pairs.find(p => p.left === selectedLeft);
+        if (correctPair && correctPair.right === item) {
+          setMatches({ ...matches, [selectedLeft]: item });
+          setSelectedLeft(null);
+          
+          // Check if all matched
+          if (Object.keys(matches).length + 1 === pairs.length) {
+            setTimeout(() => onComplete(mistakes === 0), 1000);
+          }
+        } else {
+          // Wrong match
+          setMistakes(m => m + 1);
+          setSelectedLeft(null);
+          // Briefly show error?
+          toast.error('Salah! Cuba lagi.');
+        }
+      }
+    };
+
+    return (
+      <div className="w-full max-w-4xl mx-auto flex flex-col items-center">
+        <h3 className="text-xl font-black text-slate-800 mb-8">Padankan semua pasangan di bawah:</h3>
+        
+        <div className="grid grid-cols-2 gap-x-12 gap-y-4 w-full">
+           <div className="space-y-3">
+             {leftItems.map(item => (
+               <button
+                 key={item}
+                 onClick={() => handlePairClick(item, 'left')}
+                 className={cn(
+                   "w-full p-6 h-24 rounded-2xl border-2 font-black shadow-sm transition-all text-center",
+                   matches[item] ? "bg-emerald-50 border-emerald-500 text-emerald-600 opacity-50" :
+                   selectedLeft === item ? "bg-indigo-600 border-indigo-600 text-white shadow-xl scale-105" :
+                   "bg-white border-slate-100 text-slate-700 hover:border-indigo-300"
+                 )}
+               >
+                 <span className={cn(direction === 'ar_to_ms' ? "text-arabic text-3xl" : "text-lg")}>{item}</span>
+               </button>
+             ))}
+           </div>
+
+           <div className="space-y-3">
+             {rightItems.map(item => {
+               const isMatched = Object.values(matches).includes(item);
+               return (
+                 <button
+                   key={item}
+                   onClick={() => handlePairClick(item, 'right')}
+                   className={cn(
+                     "w-full p-6 h-24 rounded-2xl border-2 font-black shadow-sm transition-all text-center",
+                     isMatched ? "bg-emerald-50 border-emerald-500 text-emerald-600 opacity-50" :
+                     "bg-white border-slate-100 text-slate-700 hover:border-indigo-300"
+                   )}
+                 >
+                   <span className={cn(direction === 'ms_to_ar' ? "text-arabic text-3xl" : "text-lg")}>{item}</span>
+                 </button>
+               );
+             })}
+           </div>
+        </div>
+      </div>
+    );
+  }
 
   const renderSummary = () => {
     const score = results.filter(r => r.isCorrect).length;

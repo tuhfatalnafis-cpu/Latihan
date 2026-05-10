@@ -16,15 +16,19 @@ import {
   BookOpen,
   Database,
   ArrowRight,
-  Settings
+  Settings,
+  LayoutDashboard,
+  Search,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { db } from '../../lib/db';
 import { Question, Topic } from '../../lib/supabase';
 import { User } from '../../types';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import CsvImporter from './CsvImporter';
-import { generateMcqsFromVocab, generateFlashcardsFromVocab, VocabRow } from '../../lib/questionGenerator';
+import VocabImporter from './VocabImporter';
+import QuestionGenerator from './QuestionGenerator';
 import { supabase } from '../../lib/supabase';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { toast } from 'sonner';
@@ -45,13 +49,13 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
   const [vocabulary, setVocabulary] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showImporter, setShowImporter] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [activeTab, setActiveTab] = useState<HeaderTabs>('questions');
+  const [showGenerator, setShowGenerator] = useState(false);
+  const [activeTab, setActiveTab] = useState<HeaderTabs>('vocabulary');
   const [isEditingTopic, setIsEditingTopic] = useState(false);
   const [editName, setEditName] = useState(topic.name);
-  const [showGenOptions, setShowGenOptions] = useState(false);
-  const [genLoading, setGenLoading] = useState(false);
-
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedSets, setExpandedSets] = useState<string[]>([]);
+  
   // Confirmation state
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
@@ -70,95 +74,6 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
     fetchData();
   }, [topic.id]);
 
-  const handleGenerateFromVocab = async (type: 'mcq' | 'flashcard') => {
-    if (vocabulary.length === 0) return alert('Tiada data perbendaharaan kata.');
-    try {
-      setGenLoading(true);
-      const vocabRows: VocabRow[] = vocabulary.map(v => ({
-        arabic: v.arabic,
-        meaning_ms: v.meaning_ms,
-        transliteration: v.transliteration || '',
-        image_keyword: v.image_keyword || ''
-      }));
-
-      const newItems = type === 'mcq' 
-        ? generateMcqsFromVocab(topic.id, vocabRows, user.id, 10)
-        : generateFlashcardsFromVocab(topic.id, vocabRows, user.id);
-
-      for (const item of newItems) {
-        await db.questions.create(item);
-      }
-      
-      fetchData();
-      setActiveTab('questions');
-      alert(`Berjaya menjana ${newItems.length} items!`);
-    } catch (err) {
-      alert('Gagal menjana.');
-    } finally {
-      setGenLoading(false);
-      setShowGenOptions(false);
-    }
-  };
-
-  const handleGenerateFromVocabAI = async () => {
-    if (vocabulary.length === 0) return alert('Tiada data perbendaharaan kata.');
-    try {
-      setGenLoading(true);
-      const vocabText = vocabulary.map(v => `${v.arabic}: ${v.meaning_ms}`).join(', ');
-      const prompt = `Gunakan senarai perbendaharaan kata ini untuk menjana soalan MCQ: ${vocabText}`;
-
-      const res = await fetch('/api/generate-questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, count: 10 })
-      });
-      
-      const data = await res.json();
-      if (!data || !Array.isArray(data)) throw new Error('Invalid AI Response');
-
-      for (const q of data) {
-        await db.questions.create({ ...q, topic_id: topic.id, created_by: user.id });
-      }
-
-      fetchData();
-      setActiveTab('questions');
-      alert('AI berjaya menjana 10 soalan baru berdasarkan vocab sedia ada!');
-    } catch (err) {
-      alert('AI gagal menjana soalan.');
-    } finally {
-      setGenLoading(false);
-    }
-  };
-
-  const handleAIBuilder = async () => {
-    const prompt = window.prompt("Beritahu AI apa topik atau perkataan yang anda mahu bina soalan. Contoh: 'Peralatan di sekolah' atau 'Warna-warna dalam bahasa Arab'");
-    if (!prompt) return;
-
-    try {
-      setGenLoading(true);
-      const res = await fetch('/api/generate-questions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, count: 10 })
-      });
-      
-      const data = await res.json();
-      if (!data || !Array.isArray(data)) throw new Error('Invalid AI Response');
-
-      for (const q of data) {
-        await db.questions.create({ ...q, topic_id: topic.id, created_by: user.id });
-      }
-
-      fetchData();
-      setActiveTab('questions');
-      alert('AI berjaya menjana 10 soalan baru!');
-    } catch (err) {
-      alert('AI gagal menjana soalan.');
-    } finally {
-      setGenLoading(false);
-    }
-  };
-
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -173,6 +88,65 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddManual = async () => {
+    const arabic = window.prompt("Masukkan perkataan Arab:");
+    const meaning = window.prompt("Masukkan maksud dalam Bahasa Melayu:");
+    if (!arabic || !meaning) return;
+
+    try {
+      await db.vocabulary.create({
+        topic_id: topic.id,
+        arabic,
+        meaning_ms: meaning,
+        transliteration: '',
+        image_keyword: ''
+      });
+      fetchData();
+      toast.success('Berjaya menambah perkataan!');
+    } catch (err) {
+      toast.error('Gagal menambah.');
+    }
+  };
+
+  const handleDeleteSet = async (setName: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Padam set soalan?',
+      message: `Adakah anda pasti mahu memadam set soalan '${setName}'? Semua soalan dalam set ini akan dipadam kekal.`,
+      onConfirm: async () => {
+        setIsDeleting(true);
+        try {
+          const { error } = await supabase
+            .from('questions')
+            .delete()
+            .eq('topic_id', topic.id)
+            .filter('metadata->>set_name', 'eq', setName);
+          
+          if (error) throw error;
+          
+          toast.success('Set soalan berjaya dipadam.');
+          fetchData();
+        } catch (err: any) {
+          toast.error('Gagal padam set: ' + err.message);
+        } finally {
+          setIsDeleting(false);
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  };
+
+  const groupQuestionsBySet = () => {
+    const sets: Record<string, Question[]> = {};
+    questions.forEach(q => {
+      const metadata = q.metadata as any;
+      const setName = metadata?.set_name || 'Tanpa Nama Set';
+      if (!sets[setName]) sets[setName] = [];
+      sets[setName].push(q);
+    });
+    return sets;
   };
 
   const handleUpdateTopic = async () => {
@@ -255,44 +229,8 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
     });
   };
 
-  const handleImportSave = async (vocab: VocabRow[], generatedQuestions: Partial<Question>[], withIcons: boolean) => {
-    try {
-      setIsGenerating(true);
-      
-      // 1. Save Vocabulary to Database
-      const vocabToInsert = vocab.map(v => ({
-        topic_id: topic.id,
-        arabic: v.arabic,
-        meaning_ms: v.meaning_ms,
-        transliteration: v.transliteration,
-        image_keyword: v.image_keyword,
-        metadata: { imported: true }
-      }));
-      await db.vocabulary.batchCreate(vocabToInsert);
-
-      // 2. Generate and Save Questions (Flashcards + MCQs)
-      const flashcards = generateFlashcardsFromVocab(topic.id, vocab, user.id);
-      
-      for (const card of flashcards) {
-        await db.questions.create(card);
-      }
-
-      for (const q of generatedQuestions) {
-        await db.questions.create({ ...q, topic_id: topic.id, created_by: user.id });
-      }
-      
-      setShowImporter(false);
-      fetchData();
-      alert('Berjaya mengimport data dan menjana soalan!');
-    } catch (err) {
-      alert('Gagal menyimpan: ' + (err as any).message);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
-    <div className="max-w-6xl mx-auto pb-20">
+    <div className="max-w-6xl mx-auto pb-32 relative">
       <div className="flex justify-between items-start mb-6">
         <div className="flex-1">
           {isEditingTopic ? (
@@ -315,23 +253,21 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
               <button onClick={handleDeleteTopicClick} className="p-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></button>
             </div>
           )}
-          <p className="text-slate-500 font-medium mt-1">Urus senarai soalan dan perbendaharaan kata.</p>
+          <p className="text-slate-500 font-medium mt-1">Urus perpustakaan kosa kata dan jana set soalan latihan.</p>
         </div>
         
         <div className="flex gap-3">
           <button 
-            onClick={() => handleAIBuilder()}
-            disabled={genLoading}
-            className="px-5 py-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2 font-bold hover:bg-amber-100 transition-all text-amber-700 shadow-sm"
+            onClick={() => setShowImporter(true)}
+            className="px-5 py-3 bg-indigo-600 text-white rounded-2xl flex items-center gap-2 font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
           >
-            {genLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} 
-            AI Builder
+            <Upload className="w-5 h-5" /> Muat Naik CSV
           </button>
           <button 
-            onClick={() => setShowImporter(true)}
-            className="px-5 py-3 bg-white border border-slate-200 rounded-2xl flex items-center gap-2 font-bold hover:bg-slate-50 transition-all text-slate-600 shadow-sm"
+            onClick={handleAddManual}
+            className="px-5 py-3 bg-white border border-slate-200 rounded-2xl flex items-center gap-2 font-black hover:bg-slate-50 transition-all text-slate-600 shadow-sm"
           >
-            <Upload className="w-5 h-5 text-indigo-500" /> Muat Naik CSV
+            <Plus className="w-5 h-5 text-emerald-500" /> Tambah Manual
           </button>
         </div>
       </div>
@@ -341,6 +277,15 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
       {/* Tabs */}
       <div className="flex gap-4 mb-8 p-1 bg-slate-100 w-fit rounded-2xl mt-8">
         <button 
+          onClick={() => setActiveTab('vocabulary')}
+          className={cn(
+            "px-6 py-2 rounded-xl font-black text-sm transition-all flex items-center gap-2",
+            activeTab === 'vocabulary' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+          )}
+        >
+          <Database className="w-4 h-4" /> Pustaka Kosa Kata ({vocabulary.length})
+        </button>
+        <button 
           onClick={() => setActiveTab('questions')}
           className={cn(
             "px-6 py-2 rounded-xl font-black text-sm transition-all flex items-center gap-2",
@@ -349,95 +294,16 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
         >
           <BookOpen className="w-4 h-4" /> Soalan ({questions.length})
         </button>
-        <button 
-          onClick={() => setActiveTab('vocabulary')}
-          className={cn(
-            "px-6 py-2 rounded-xl font-black text-sm transition-all flex items-center gap-2",
-            activeTab === 'vocabulary' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
-          )}
-        >
-          <Database className="w-4 h-4" /> Perbendaharaan Kata ({vocabulary.length})
-        </button>
       </div>
 
       {loading ? (
-        <div className="py-24 flex flex-col items-center justify-center text-slate-400">
-          <Loader2 className="w-10 h-10 animate-spin mb-4 text-indigo-500" />
-          <p className="font-bold">Memuatkan data...</p>
+        <div className="py-24 flex flex-col items-center justify-center text-slate-400 text-center">
+          <Loader2 className="w-12 h-12 animate-spin mb-4 text-indigo-500" />
+          <p className="font-bold text-slate-800 uppercase tracking-widest text-[10px]">Memuatkan Data...</p>
         </div>
       ) : (
         <AnimatePresence mode="wait">
-          {activeTab === 'questions' ? (
-            <motion.div 
-              key="qs"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-4"
-            >
-              {questions.length === 0 ? (
-                <div className="bg-white p-20 rounded-[40px] border border-dashed border-slate-200 text-center flex flex-col items-center">
-                   <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                     <BrainCircuit className="w-12 h-12 text-slate-200" />
-                   </div>
-                   <h3 className="text-2xl font-black text-slate-800">Tiada Soalan Lagi</h3>
-                   <p className="text-slate-500 max-w-sm mt-2 font-medium">Jana soalan secara automatik daripada perbendaharaan kata atau import fail CSV.</p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                  <div className="grid grid-cols-12 bg-slate-50 px-6 py-4 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    <div className="col-span-1">No.</div>
-                    <div className="col-span-4">Soalan / Pembayang</div>
-                    <div className="col-span-3">Jawapan / Arab</div>
-                    <div className="col-span-2">Jenis</div>
-                    <div className="col-span-2 text-right">Tindakan</div>
-                  </div>
-                  <div className="divide-y divide-slate-50">
-                    {questions.map((q, i) => (
-                      <div key={q.id} className="grid grid-cols-12 px-6 py-5 items-center hover:bg-slate-50 transition-colors group">
-                        <div className="col-span-1 text-[10px] font-black text-slate-300">{(i + 1).toString().padStart(2, '0')}</div>
-                        <div className="col-span-4 flex items-center gap-4">
-                          {q.metadata.image_url && (
-                            <div className="w-10 h-10 bg-white rounded-lg overflow-hidden p-1 shrink-0 border border-slate-100 flex items-center justify-center">
-                              <img src={q.metadata.image_url} alt="icon" className="w-full h-full object-contain" />
-                            </div>
-                          )}
-                          <div>
-                            <p className={cn("font-bold text-slate-800 leading-tight", q.question_type === 'multiple_choice' && q.metadata.direction === 'ar_to_ms' ? "text-arabic text-xl" : "text-sm")} dir={q.question_type === 'multiple_choice' && q.metadata.direction === 'ar_to_ms' ? 'rtl' : 'ltr'}>
-                              {q.prompt}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="col-span-3">
-                          <p className={cn("font-black text-slate-900 leading-tight", q.question_type === 'flashcard' || (q.question_type === 'multiple_choice' && q.metadata.direction === 'ms_to_ar') ? "text-arabic text-xl" : "text-sm underline decoration-indigo-500 decoration-2 underline-offset-4")} dir={q.question_type === 'flashcard' || (q.question_type === 'multiple_choice' && q.metadata.direction === 'ms_to_ar') ? 'rtl' : 'ltr'}>
-                            {q.answer}
-                          </p>
-                        </div>
-                        <div className="col-span-2">
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
-                            q.question_type === 'flashcard' ? "bg-amber-100 text-amber-600" : "bg-indigo-100 text-indigo-600"
-                          )}>
-                            {q.question_type === 'flashcard' ? 'KAD' : 'MCQ'}
-                          </span>
-                        </div>
-                        <div className="col-span-2 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button 
-                               onClick={() => handleDeleteQuestion(q.id)}
-                               className="p-2 text-slate-300 hover:text-rose-500 hover:bg-white rounded-lg transition-all shadow-sm border border-transparent hover:border-slate-100"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          ) : (
+          {activeTab === 'vocabulary' ? (
             <motion.div 
               key="vocab"
               initial={{ opacity: 0, y: 10 }}
@@ -445,58 +311,63 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
               exit={{ opacity: 0, y: -10 }}
               className="space-y-6"
             >
+              <div className="flex gap-4 items-center mb-2">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                  <input 
+                    placeholder="Cari perkataan..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-6 py-4 bg-white border border-slate-100 rounded-2xl font-bold text-slate-800 outline-none focus:border-indigo-100 shadow-sm transition-all"
+                  />
+                </div>
+                <button 
+                  onClick={() => setShowGenerator(true)}
+                  disabled={vocabulary.length < 4}
+                  className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center gap-3 disabled:opacity-50"
+                >
+                  <BrainCircuit className="w-5 h-5" /> Jana Set Soalan
+                </button>
+              </div>
+
               {vocabulary.length === 0 ? (
                 <div className="bg-white p-20 rounded-[40px] border border-dashed border-slate-200 text-center flex flex-col items-center">
                    <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
                      <Database className="w-12 h-12 text-slate-200" />
                    </div>
-                   <h3 className="text-2xl font-black text-slate-800">Pangkalan Kata Kosong</h3>
-                   <p className="text-slate-500 max-w-sm mt-2 font-medium">Muat naik fail CSV untuk mengisi pangkalan kata topik ini.</p>
+                   <h3 className="text-2xl font-black text-slate-800">Pustaka Kosong</h3>
+                   <p className="text-slate-500 max-w-sm mt-2 font-medium">Muat naik fail CSV atau tambah manual untuk mula membina soalan.</p>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center bg-emerald-50 p-6 rounded-3xl border border-emerald-100">
-                    <div>
-                      <p className="font-extrabold text-emerald-900 leading-tight">Data Perbendaharaan Kata</p>
-                      <p className="text-emerald-700/80 text-xs mt-1 font-medium italic">Anda boleh menggunakan data ini untuk menjana soalan-soalan baru pada bila-bila masa.</p>
-                    </div>
-                    <div className="flex gap-2">
-                       <button 
-                         onClick={() => handleGenerateFromVocab('flashcard')}
-                         disabled={genLoading}
-                         className="px-4 py-2 bg-white border border-emerald-200 text-emerald-600 rounded-xl text-xs font-black hover:bg-emerald-100 transition-all flex items-center gap-2"
-                        >
-                          <BookOpen className="w-4 h-4" /> Jana Kad Hafalan
-                        </button>
-                        <button 
-                         onClick={() => handleGenerateFromVocab('mcq')}
-                         disabled={genLoading}
-                         className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center gap-2"
-                        >
-                          <BrainCircuit className="w-4 h-4" /> Jana Soalan (MCQ)
-                        </button>
-                        <button 
-                         onClick={() => handleGenerateFromVocabAI()}
-                         disabled={genLoading}
-                         className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
-                        >
-                          <Sparkles className="w-4 h-4" /> Jana AI (Vocab)
-                        </button>
-                    </div>
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                  <div className="grid grid-cols-12 bg-slate-50 px-6 py-4 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <div className="col-span-4">Bahasa Arab</div>
+                    <div className="col-span-1">Ikon</div>
+                    <div className="col-span-5">Terjemahan Melayu</div>
+                    <div className="col-span-2 text-right">Tindakan</div>
                   </div>
-
-                  <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                    <div className="grid grid-cols-12 bg-slate-50 px-6 py-4 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <div className="col-span-5">Bahasa Arab</div>
-                      <div className="col-span-5">Terjemahan Melayu</div>
-                      <div className="col-span-2 text-right">Tindakan</div>
-                    </div>
-                    <div className="divide-y divide-slate-50 max-h-[500px] overflow-y-auto">
-                      {vocabulary.map((v) => (
+                  <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto">
+                    {vocabulary
+                      .filter(v => 
+                        v.arabic.includes(searchQuery) || 
+                        v.meaning_ms.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                      .map((v) => (
                         <div key={v.id} className="grid grid-cols-12 px-6 py-5 items-center hover:bg-slate-50 transition-colors group">
-                          <div className="col-span-5">
+                          <div className="col-span-4">
                             <p className="text-arabic text-xl text-slate-800 font-bold leading-none">{v.arabic}</p>
                             {v.transliteration && <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{v.transliteration}</p>}
+                          </div>
+                          <div className="col-span-1">
+                            {v.image_keyword ? (
+                              <div className="w-8 h-8 bg-white border border-slate-100 rounded-lg p-1 flex items-center justify-center">
+                                <img src={`https://openmoji.org/data/color/svg/${v.image_keyword}.svg`} alt="" className="w-full h-full object-contain" />
+                              </div>
+                            ) : (
+                              <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center">
+                                <Plus className="w-3 h-3 text-slate-200" />
+                              </div>
+                            )}
                           </div>
                           <div className="col-span-5">
                             <p className="text-sm font-bold text-slate-700">{v.meaning_ms}</p>
@@ -511,8 +382,114 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                           </div>
                         </div>
                       ))}
-                    </div>
                   </div>
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="qs"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-6"
+            >
+              {Object.keys(groupQuestionsBySet()).length === 0 ? (
+                <div className="bg-white p-20 rounded-[40px] border border-dashed border-slate-200 text-center flex flex-col items-center">
+                   <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                     <BrainCircuit className="w-12 h-12 text-slate-200" />
+                   </div>
+                   <h3 className="text-2xl font-black text-slate-800">Tiada Set Soalan</h3>
+                   <p className="text-slate-500 max-w-sm mt-2 font-medium">Pergi ke Pustaka Kosa Kata untuk menjana set soalan baru secara automatik.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(groupQuestionsBySet()).map(([setName, setQs]) => {
+                    const isExpanded = expandedSets.includes(setName);
+                    const sampleQ = setQs[0];
+                    const metadata = sampleQ.metadata as any;
+                    const method = metadata?.generation_method || 'manual';
+                    
+                    return (
+                      <div key={setName} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+                        <div className="p-6 flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "p-3 rounded-2xl",
+                              method === 'ai_enhanced' ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-600"
+                            )}>
+                              {method === 'ai_enhanced' ? <Sparkles className="w-5 h-5" /> : <Database className="w-5 h-5" />}
+                            </div>
+                            <div>
+                              <h4 className="font-black text-slate-800 text-lg leading-tight">{setName}</h4>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{setQs.length} Soalan</span>
+                                <span className="w-1 h-1 bg-slate-200 rounded-full" />
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(sampleQ.created_at).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                             <button 
+                               onClick={() => handleDeleteSet(setName)}
+                               className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                             >
+                               <Trash2 className="w-5 h-5" />
+                             </button>
+                             <button 
+                               onClick={() => setExpandedSets(prev => isExpanded ? prev.filter(s => s !== setName) : [...prev, setName])}
+                               className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all flex items-center gap-2 font-black text-xs uppercase tracking-widest"
+                             >
+                               {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                               {isExpanded ? 'Tutup' : 'Lihat'}
+                             </button>
+                          </div>
+                        </div>
+
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div 
+                              initial={{ height: 0 }}
+                              animate={{ height: 'auto' }}
+                              exit={{ height: 0 }}
+                              className="border-t border-slate-50"
+                            >
+                              <div className="max-h-[400px] overflow-y-auto">
+                                <table className="w-full text-left border-collapse">
+                                  <tbody className="divide-y divide-slate-50">
+                                    {setQs.map((q, idx) => (
+                                      <tr key={q.id} className="hover:bg-slate-50/50">
+                                        <td className="p-4 text-[10px] font-black text-slate-300">{(idx + 1).toString().padStart(2, '0')}</td>
+                                        <td className="p-4">
+                                          <p className={cn("font-bold text-slate-800", q.metadata?.direction === 'ar_to_ms' ? "text-arabic text-xl text-right" : "text-sm")}>
+                                            {q.prompt}
+                                          </p>
+                                        </td>
+                                        <td className="p-4">
+                                          <p className={cn("font-black text-indigo-600", q.metadata?.direction === 'ms_to_ar' ? "text-arabic text-xl" : "text-sm")}>
+                                            {q.answer}
+                                          </p>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                          <button 
+                                            onClick={() => handleDeleteQuestion(q.id)}
+                                            className="p-2 text-slate-300 hover:text-rose-500 rounded-lg"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </motion.div>
@@ -521,13 +498,29 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
       )}
 
       {showImporter && (
-        <CsvImporter 
-          onClose={() => setShowImporter(false)} 
-          onSave={handleImportSave}
+        <VocabImporter 
           topicId={topic.id}
-          userId={user.id}
+          onClose={() => setShowImporter(false)}
+          onComplete={fetchData}
         />
       )}
+
+      {showGenerator && (
+        <QuestionGenerator 
+          topicId={topic.id}
+          userId={user.id}
+          library={vocabulary.map(v => ({
+            id: v.id,
+            arabic: v.arabic,
+            meaning_ms: v.meaning_ms,
+            transliteration: v.transliteration,
+            image_keyword: v.image_keyword
+          }))}
+          onClose={() => setShowGenerator(false)}
+          onComplete={fetchData}
+        />
+      )}
+
       <ConfirmDialog 
         isOpen={confirmState.isOpen}
         onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
