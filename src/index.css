@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Amiri:wght@400;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-arabic: "Amiri", "Noto Naskh Arabic", serif;
+}
+
+@utility text-arabic {
+  font-family: var(--font-arabic);
+  direction: rtl;
+  line-height: 1.6;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased overflow-x-hidden;
+}
+
+/* Bright playful student colors */
+.student-theme {
+  --color-primary: #6366f1; /* indigo-500 */
+  --color-secondary: #f43f5e; /* rose-500 */
+}
