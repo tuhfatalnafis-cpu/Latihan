@@ -13,17 +13,36 @@ function App() {
 
   useEffect(() => {
     // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        fetchProfile(session.user.id, session.user.email || '');
-      } else {
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Session error:', error);
+          if (error.message.includes('Refresh Token') || error.message.includes('Invalid token')) {
+            await supabase.auth.signOut();
+          }
+          setLoading(false);
+          return;
+        }
+        if (session) {
+          fetchProfile(session.user.id, session.user.email || '');
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Session check crash:', err);
         setLoading(false);
       }
-    });
+    };
+
+    checkSession();
 
     // Listen for changes on auth state (logged in, signed out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setLoading(false);
+      } else if (session) {
         fetchProfile(session.user.id, session.user.email || '');
       } else {
         setUser(null);

@@ -90,6 +90,20 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
     return [currentQuestion.answer, ...(currentQuestion.distractors || [])].sort(() => Math.random() - 0.5);
   }, [currentQuestion?.id]);
 
+  const handleNext = () => {
+    setFeedback(null);
+    setIsMastered(false);
+    setIsFlipped(false);
+    
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setStartTime(Date.now());
+    } else {
+      fetchTopicStats(); // Fetch updated stats for summary
+      setShowSummary(true);
+    }
+  };
+
   const handleAnswer = async (isCorrect: boolean) => {
     if (feedback) return; // Prevent double taps
 
@@ -127,22 +141,9 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
       }
 
       setResults([...results, { questionId: currentQuestion.id, isCorrect }]);
-
-      // 3. Move to next after a delay
-      setTimeout(() => {
-        setFeedback(null);
-        setIsMastered(false);
-        setIsFlipped(false);
-        if (currentIndex < questions.length - 1) {
-          setCurrentIndex(currentIndex + 1);
-          setStartTime(Date.now());
-        } else {
-          fetchTopicStats(); // Fetch updated stats for summary
-          setShowSummary(true);
-        }
-      }, 1000);
     } catch (err) {
       console.error('Save result error:', err);
+      // We don't block the UI if the save fails, the student can still proceed
     }
   };
 
@@ -403,7 +404,7 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col font-sans overflow-hidden">
+    <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col font-sans overflow-y-auto sm:overflow-hidden">
       {/* Header */}
       <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 md:px-10 shrink-0">
          <div className="flex items-center gap-4">
@@ -432,19 +433,42 @@ export default function StudySession({ user, topic, onClose }: StudySessionProps
       </header>
 
       {/* Main Area */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 relative">
-        {loading ? (
-          <div className="flex flex-col items-center gap-4 text-slate-400">
-            <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
-            <p className="font-black">Menyediakan soalan hafalan...</p>
-          </div>
-        ) : showSummary ? (
-          renderSummary()
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center">
-            {renderQuestion()}
-          </div>
-        )}
+      <main className="flex-1 overflow-y-auto p-6 md:p-10 relative">
+        <div className="min-h-full w-full flex flex-col items-center justify-center max-w-5xl mx-auto py-10">
+          {loading ? (
+            <div className="flex flex-col items-center gap-4 text-slate-400">
+              <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
+              <p className="font-black">Menyediakan soalan hafalan...</p>
+            </div>
+          ) : showSummary ? (
+            renderSummary()
+          ) : (
+            <>
+              <div className="w-full flex-1 flex flex-col items-center justify-center">
+                {renderQuestion()}
+              </div>
+
+              {/* Action Bar / Next Button */}
+              <AnimatePresence>
+                {feedback && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 30 }}
+                    className="mt-12 mb-8"
+                  >
+                    <button 
+                      onClick={handleNext}
+                      className="px-16 py-6 bg-indigo-600 text-white rounded-full font-black text-xl shadow-2xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all flex items-center gap-4"
+                    >
+                      Seterusnya <ArrowRight className="w-6 h-6" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </div>
 
         {/* Feedback Overlay */}
         <AnimatePresence>
