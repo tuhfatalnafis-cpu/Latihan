@@ -34,6 +34,151 @@ export const db = {
         .single();
       if (error) throw error;
       return data as Profile;
+    },
+    async getDashboardStats(id: string) {
+      // 1. Get total questions finished (unique question_id in attempts)
+      const { count: totalQuestions, error: qError } = await supabase
+        .from('attempts')
+        .select('question_id', { count: 'exact', head: true })
+        .eq('student_id', id);
+
+      if (qError) throw qError;
+
+      // 2. Calculate total time
+      const { data: timeData, error: tError } = await supabase
+        .from('attempts')
+        .select('response_time_ms')
+        .eq('student_id', id);
+      
+      const totalTimeMs = timeData?.reduce((acc, curr) => acc + (curr.response_time_ms || 0), 0) || 0;
+
+      // 3. Total mastered
+      const { count: totalMastered, error: mError } = await supabase
+        .from('progress')
+        .select('*', { count: 'exact', head: true })
+        .eq('student_id', id)
+        .gte('consecutive_correct', 3);
+
+      // 4. Calculate streak
+      const { data: days, error: dError } = await supabase
+        .rpc('get_study_days', { user_id_param: id });
+      
+      // If RPC is not available, we fall back to a manual query
+      let streak = 0;
+      if (dError) {
+        const { data: attempts } = await supabase
+          .from('attempts')
+          .select('answered_at')
+          .eq('student_id', id)
+          .order('answered_at', { ascending: false });
+
+        if (attempts && attempts.length > 0) {
+          const uniqueDays = new Set(attempts.map(a => a.answered_at.split('T')[0]));
+          const sortedDays = Array.from(uniqueDays).sort().reverse();
+          
+          const today = new Date().toISOString().split('T')[0];
+          const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+          
+          if (sortedDays[0] === today || sortedDays[0] === yesterday) {
+            streak = 1;
+            let current = sortedDays[0];
+            for (let i = 1; i < sortedDays.length; i++) {
+              const prev = new Date(new Date(current).getTime() - 86400000).toISOString().split('T')[0];
+              if (sortedDays[i] === prev) {
+                streak++;
+                current = prev;
+              } else {
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        streak = days?.[0]?.streak || 0;
+      }
+
+      return {
+        streak,
+        totalQuestions: totalQuestions || 0,
+        totalTimeMs,
+        totalMastered: totalMastered || 0
+      };
+    }
+  },
+
+  admin: {
+    async getGlobalStats() {
+      // 1. Total Students
+      const { count: totalStudents } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'student');
+
+      // 2. Active Vocabulary (Total Questions)
+      const { count: totalVocabulary } = await supabase
+        .from('questions')
+        .select('*', { count: 'exact', head: true });
+
+      // 3. Lessons/Sessions Today (Total unique users who studied today)
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      
+      const { data: todayAttempts } = await supabase
+        .from('attempts')
+        .select('student_id')
+        .gte('answered_at', todayStart.toISOString());
+      
+      const uniqueStudentsToday = new Set(todayAttempts?.map(a => a.student_id)).size;
+      
+      // 4. Success Rate
+      const { data: totalAttempts } = await supabase
+        .from('attempts')
+        .select('is_correct');
+      
+      const successRate = totalAttempts && totalAttempts.length > 0
+        ? Math.round((totalAttempts.filter(a => a.is_correct).length / totalAttempts.length) * 100)
+        : 0;
+
+      // 5. Recent Activity (Recent signups)
+      const { data: recentSignups } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'student')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      // 6. Chart Data (Attempts per day for last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const { data: dailyActivity } = await supabase
+        .from('attempts')
+        .select('answered_at')
+        .gte('answered_at', sevenDaysAgo.toISOString());
+      
+      const chartData: Record<string, number> = {};
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dayStr = d.toISOString().split('T')[0];
+        chartData[dayStr] = 0;
+      }
+      
+      dailyActivity?.forEach(a => {
+        const dayStr = a.answered_at.split('T')[0];
+        if (chartData[dayStr] !== undefined) {
+          chartData[dayStr]++;
+        }
+      });
+
+      return {
+        totalStudents: totalStudents || 0,
+        totalVocabulary: totalVocabulary || 0,
+        sessionsToday: uniqueStudentsToday || 0,
+        successRate,
+        recentSignups: recentSignups || [],
+        chartData: Object.entries(chartData).map(([day, count]) => ({ day, count })).reverse()
+      };
     }
   },
 
@@ -174,9 +319,29 @@ export const db = {
 
       if (progressError) throw progressError;
 
+      // Get last session accuracy (attempts in the last 24h or last batch)
+      // This is a simple heuristic: find the latest attempts and calculate accuracy
+      const { data: recentAttempts, error: attemptsError } = await supabase
+        .from('attempts')
+        .select('*, questions!inner(topic_id)')
+        .eq('student_id', studentId)
+        .eq('questions.topic_id', id)
+        .order('answered_at', { ascending: false })
+        .limit(50);
+
+      if (attemptsError) throw attemptsError;
+
+      // Calculate accuracy of previous session
+      // For trend, we can split the history if we had session IDs, 
+      // but we can just compare last 20 with previous 20 or similar.
+      const previousAccuracy = recentAttempts && recentAttempts.length > 0
+        ? (recentAttempts.filter((a: any) => a.is_correct).length / recentAttempts.length) * 100
+        : 0;
+
       return {
         total: total || 0,
-        mastered: progress?.length || 0
+        mastered: progress?.length || 0,
+        previousAccuracy
       };
     }
   },

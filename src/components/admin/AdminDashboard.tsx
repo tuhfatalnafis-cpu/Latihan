@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
+import { db } from '../../lib/db';
 import { 
   Users, 
   Settings, 
@@ -8,116 +10,178 @@ import {
   LayoutDashboard,
   BookOpen,
   PieChart,
-  UserCircle
+  UserCircle,
+  TrendingUp,
+  Award,
+  BookMarked,
+  Activity
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { User } from '../../types';
 import ContentManager from './ContentManager';
 import StudentManager from './StudentManager';
+import { AdminLayout } from '../../layouts/AdminLayout';
+import { Card } from '../ui/Card';
+import { StatCard } from '../ui/StatCard';
 
 interface AdminDashboardProps {
   user: User;
   onLogout: () => void;
 }
 
-type AdminTab = 'content' | 'students' | 'analytics' | 'settings';
+type AdminTab = 'dashboard' | 'content' | 'students' | 'settings';
 
 export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<AdminTab>('content');
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+  const [globalStats, setGlobalStats] = useState<{
+    totalStudents: number,
+    totalVocabulary: number,
+    sessionsToday: number,
+    successRate: number,
+    recentSignups: any[],
+    chartData: { day: string, count: number }[]
+  } | null>(null);
 
-  const menuItems = [
-    { id: 'content', title: 'Kad & Subjek', icon: BookOpen },
-    { id: 'students', title: 'Pengurusan Pelajar', icon: Users },
-    { id: 'analytics', title: 'Prestasi', icon: BarChart3 },
-    { id: 'settings', title: 'Tetapan', icon: Settings },
-  ];
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      fetchGlobalStats();
+    }
+  }, [activeTab]);
+
+  const fetchGlobalStats = async () => {
+    try {
+      const stats = await db.admin.getGlobalStats();
+      setGlobalStats(stats as any);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const getPageTitle = () => {
+    switch(activeTab) {
+      case 'dashboard': return 'Ringkasan Eksekutif';
+      case 'content': return 'Dashboard Kandungan';
+      case 'students': return 'Pengurusan Pelajar';
+      case 'settings': return 'Tetapan Sistem';
+      default: return 'Pentadbiran';
+    }
+  };
+
+  const renderDashboardOverview = () => (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard label="Jumlah Pelajar" value={globalStats?.totalStudents || 0} icon={Users} variant="primary" />
+        <StatCard label="Kosa Kata Aktif" value={globalStats?.totalVocabulary || 0} icon={BookMarked} variant="mint" />
+        <StatCard label="Pelajar Hari Ini" value={globalStats?.sessionsToday || 0} icon={Activity} variant="warm" />
+        <StatCard label="Kadar Kejayaan" value={`${globalStats?.successRate || 0}%`} icon={Award} variant="lilac" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+           <div className="flex items-center justify-between mb-8">
+             <div>
+               <h3 className="text-xl font-black text-ink">Aktiviti Pembelajaran</h3>
+               <p className="text-sm font-bold text-ink-muted">Statistik penggunaan 7 hari terakhir</p>
+             </div>
+             <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 bg-primary rounded-full" />
+                  <span className="text-xs font-bold text-ink-muted">Minggu Ini</span>
+                </div>
+             </div>
+           </div>
+           <div className="h-64 flex items-end gap-2 px-4 pb-4">
+              {globalStats?.chartData.map((d, i) => {
+                const max = Math.max(...globalStats.chartData.map(c => c.count), 1);
+                const height = (d.count / max) * 100;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-3 group relative">
+                    <div className="w-full bg-slate-50 rounded-t-xl relative h-full flex items-end overflow-hidden">
+                      <motion.div 
+                        initial={{ height: 0 }}
+                        animate={{ height: `${height}%` }}
+                        className="w-full bg-primary/20 group-hover:bg-primary/40 transition-colors"
+                      />
+                    </div>
+                    <span className="text-[10px] font-black text-ink-muted uppercase">
+                      {new Date(d.day).toLocaleDateString('ms-MY', { weekday: 'short' })}
+                    </span>
+                    <div className="absolute top-0 -translate-y-8 bg-ink text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                      {d.count} Percubaan
+                    </div>
+                  </div>
+                );
+              })}
+              {(!globalStats || globalStats.chartData.length === 0) && (
+                <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-slate-100 rounded-3xl">
+                   <p className="text-xs font-black text-ink-muted uppercase tracking-widest">Tiada data aktiviti lagi</p>
+                </div>
+              )}
+           </div>
+        </Card>
+
+        <Card>
+          <h3 className="text-xl font-black text-ink mb-6">Pendaftaran Terbaru</h3>
+          <div className="space-y-6">
+            {globalStats?.recentSignups.map((s, i) => (
+              <div key={s.id} className="flex gap-4 group cursor-default">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex-shrink-0 flex items-center justify-center text-primary font-black group-hover:scale-110 transition-transform">
+                   {s.full_name?.charAt(0) || 'U'}
+                </div>
+                <div className="overflow-hidden">
+                   <p className="text-sm font-black text-ink leading-none truncate">{s.full_name || 'Pelajar Baru'}</p>
+                   <p className="text-[10px] font-bold text-ink-muted mt-1 truncate">{s.email}</p>
+                   <p className="text-[10px] font-black text-primary uppercase mt-2">
+                     {new Date(s.created_at).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short' })}
+                   </p>
+                </div>
+              </div>
+            ))}
+            {globalStats?.recentSignups.length === 0 && (
+              <p className="text-xs font-bold text-ink-muted text-center py-10 opacity-50">Tiada pendaftaran baru</p>
+            )}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans">
-      {/* Sidebar */}
-      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col hidden md:flex">
-        <div className="p-8">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <span className="text-xl font-black text-slate-800 tracking-tight">Cepat Belajar</span>
+    <AdminLayout 
+      user={user} 
+      activeTab={activeTab} 
+      onTabChange={(tab) => setActiveTab(tab as AdminTab)}
+      onLogout={onLogout}
+      title={getPageTitle()}
+    >
+      <div className="space-y-6">
+        {activeTab === 'dashboard' && renderDashboardOverview()}
+        {activeTab === 'content' && <ContentManager user={user} />}
+        {activeTab === 'students' && <StudentManager />}
+        {activeTab === 'settings' && (
+          <div className="max-w-2xl mx-auto py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Card className="p-12 text-center flex flex-col items-center">
+               <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center mb-8 shadow-soft">
+                 <Settings className="w-10 h-10 text-primary animate-spin-slow" />
+               </div>
+               <h3 className="text-3xl font-black text-ink">Tetapan Platform</h3>
+               <p className="text-ink-muted mt-4 font-bold leading-relaxed">
+                 Panel konfigurasi sistem sedang dalam pembinaan untuk peringkat seterusnya. Anda akan dapat mengurus parameter AI dan tetapan bahasa di sini.
+               </p>
+               <div className="mt-10 grid grid-cols-2 gap-4 w-full">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                    <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Versi Sistem</p>
+                    <p className="text-sm font-black text-ink">v2.0.4-beta</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Status Server</p>
+                    <p className="text-sm font-black text-ink">Stabil</p>
+                  </div>
+               </div>
+            </Card>
           </div>
-          
-          <nav className="space-y-2">
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id as AdminTab)}
-                className={cn(
-                  "w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-sm font-bold transition-all",
-                  activeTab === item.id 
-                    ? "bg-indigo-50 text-indigo-600" 
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-                )}
-              >
-                <item.icon className={cn("w-5 h-5", activeTab === item.id ? "text-indigo-600" : "text-slate-400")} />
-                {item.title}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        <div className="mt-auto p-6 border-t border-slate-100">
-          <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl mb-4">
-            <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-indigo-600 font-bold border border-slate-100">
-              {user.name.charAt(0)}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
-              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mt-1">Pentadbir</p>
-            </div>
-          </div>
-          <button 
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-          >
-            <LogOut className="w-5 h-5" />
-            Log Keluar
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-10 shrink-0">
-          <h2 className="text-xl font-black text-slate-800 tracking-tight">
-            {menuItems.find(m => m.id === activeTab)?.title}
-          </h2>
-          
-          <div className="flex items-center gap-6">
-            <div className="hidden lg:flex flex-col items-right">
-               <span className="text-xs text-slate-400 font-bold uppercase tracking-widest text-right">Dashboard Terkini</span>
-               <span className="text-sm font-black text-slate-800">Pentadbiran Pelajar & Kandungan</span>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200" />
-          </div>
-        </header>
-
-        <section className="flex-1 overflow-y-auto p-10">
-          {activeTab === 'content' && <ContentManager user={user} />}
-          {activeTab === 'students' && <StudentManager />}
-          {activeTab === 'analytics' && (
-            <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center flex flex-col items-center">
-               <PieChart className="w-12 h-12 text-slate-200 mb-4" />
-               <h3 className="text-xl font-bold text-slate-800">Analisis Prestasi</h3>
-               <p className="text-slate-500 max-w-sm mt-1">Ciri perincian prestasi platform akan tersedia selepas data mencukupi dari aktiviti pelajar.</p>
-            </div>
-          )}
-          {activeTab === 'settings' && (
-            <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center flex flex-col items-center">
-               <Settings className="w-12 h-12 text-slate-200 mb-4" />
-               <h3 className="text-xl font-bold text-slate-800">Tetapan Platform</h3>
-               <p className="text-slate-500 max-w-sm mt-1">Konfigurasi sistem sedang dalam pembinaan.</p>
-            </div>
-          )}
-        </section>
-      </main>
-    </div>
+        )}
+      </div>
+    </AdminLayout>
   );
 }

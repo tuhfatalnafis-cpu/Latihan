@@ -8,11 +8,15 @@ import {
   User as UserIcon,
   Loader2,
   AlertCircle,
-  GraduationCap
+  GraduationCap,
+  Sparkles
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { STRINGS } from '../lib/strings';
 
 interface AuthScreenProps {
   onLogin: (user: User) => void;
@@ -95,48 +99,53 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col md:flex-row">
-      <div className="md:w-1/2 bg-indigo-600 p-12 flex flex-col justify-center text-white relative overflow-hidden">
-        <div className="relative z-10 max-w-lg">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm shadow-xl">
-              <GraduationCap className="w-10 h-10" />
+    <div className="min-h-screen bg-bg-cream flex flex-col items-center justify-center p-6 sm:p-12 font-sans overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -mr-64 -mt-64" />
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-accent-warm/10 rounded-full blur-[100px] -ml-48 -mb-48" />
+
+      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-12 items-center relative z-10">
+        <div className="text-center md:text-left space-y-8">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-3 px-6 py-3 bg-white rounded-3xl shadow-soft"
+          >
+            <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-white font-black text-xl">
+              C
             </div>
-            <h1 className="text-4xl font-black tracking-tight">Cepat Belajar</h1>
-          </div>
-          <h2 className="text-5xl font-extrabold mb-8 leading-[1.15]">
-            Platform Ulatan <span className="text-indigo-200 italic underline decoration-indigo-300">Pantas</span> & Pintar.
-          </h2>
-          <p className="text-xl text-indigo-100 mb-12 font-medium">
-            Kuasai subjek sekolah dengan teknik hafalan berkesan (SRS) dan soalan interaktif.
-          </p>
-          
+            <span className="font-extrabold text-xl tracking-tight text-ink">Cepat Belajar</span>
+          </motion.div>
+
           <div className="space-y-4">
-            <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/10">
-              <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
-                <BrainCircuit className="w-6 h-6" />
+            <h1 className="text-5xl sm:text-6xl font-black text-ink leading-[1.1] tracking-tight">
+              {STRINGS.auth.subtitle}
+            </h1>
+            <p className="text-xl text-ink-muted leading-relaxed max-w-md mx-auto md:mx-0">
+              Kuasai subjek sekolah dengan teknik hafalan berkesan (SRS) dan soalan interaktif.
+            </p>
+          </div>
+
+          <div className="hidden md:flex flex-col gap-4">
+            <div className="flex items-center gap-4 p-5 bg-white rounded-3xl border border-slate-100 shadow-soft w-fit">
+              <div className="w-12 h-12 bg-accent-mint/20 rounded-2xl flex items-center justify-center text-accent-mint-dark">
+                <BrainCircuit className="w-6 h-6 text-emerald-600" />
               </div>
               <div>
-                <h4 className="font-bold">Teknik SRS</h4>
-                <p className="text-sm text-indigo-100/70 text-xs">Ulangkaji pada waktu yang paling tepat untuk ingatan jangka masa panjang.</p>
+                <h4 className="font-extrabold text-ink">Teknik SRS</h4>
+                <p className="text-sm text-ink-muted">Ingatan jangka panjang yang kukuh.</p>
               </div>
             </div>
           </div>
         </div>
-        
-        {/* Abstract shapes */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-400 rounded-full blur-[120px] -mr-64 -mt-64 opacity-30"></div>
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-800 rounded-full blur-[100px] -ml-48 -mb-48 opacity-40"></div>
-      </div>
 
-      <div className="md:w-1/2 flex items-center justify-center p-8 bg-slate-50">
-        <div className="w-full max-w-md">
-          <div className="mb-10 text-center md:text-left">
-            <h3 className="text-3xl font-black text-slate-900 mb-2">
+        <Card className="w-full max-w-md mx-auto" padding="lg">
+          <div className="mb-10">
+            <h3 className="text-3xl font-black text-ink mb-2">
               {mode === 'login' ? 'Selamat Kembali' : 'Daftar Akaun'}
             </h3>
-            <p className="text-slate-500 font-medium">
-              {mode === 'login' ? 'Masuk ke dashboard pembelajaran anda' : 'Mulakan perjalanan ilmu anda hari ini'}
+            <p className="text-ink-muted font-bold">
+              {mode === 'login' ? 'Masuk ke dashboard anda' : 'Mulakan perjalanan hari ini'}
             </p>
           </div>
 
@@ -161,15 +170,15 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   className="space-y-5 overflow-hidden"
                 >
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5 ml-1">Nama Penuh</label>
+                    <label className="block text-[10px] font-black text-ink-muted uppercase tracking-widest mb-2 ml-1">Nama Penuh</label>
                     <div className="relative group">
-                      <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                      <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted group-focus-within:text-primary transition-colors" />
                       <input 
                         type="text" 
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Cth: Ahmad bin Abu"
-                        className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all bg-white shadow-sm font-medium"
+                        placeholder="Nama penuh anda"
+                        className="w-full pl-14 pr-5 py-4 rounded-2xl border border-slate-100 focus:border-primary outline-none transition-all bg-slate-50 font-bold text-ink"
                         required={mode === 'signup'}
                       />
                     </div>
@@ -180,63 +189,58 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
 
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5 ml-1">Alamat Emel</label>
+                <label className="block text-[10px] font-black text-ink-muted uppercase tracking-widest mb-2 ml-1">Alamat Emel</label>
                 <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                  <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted group-focus-within:text-primary transition-colors" />
                   <input 
                     type="email" 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="pengguna@emel.com"
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all bg-white shadow-sm font-medium"
+                    className="w-full pl-14 pr-5 py-4 rounded-2xl border border-slate-100 focus:border-primary outline-none transition-all bg-slate-50 font-bold text-ink"
                     required
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5 ml-1">Kata Laluan</label>
+                <label className="block text-[10px] font-black text-ink-muted uppercase tracking-widest mb-2 ml-1">Kata Laluan</label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                  <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted group-focus-within:text-primary transition-colors" />
                   <input 
                     type="password" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all bg-white shadow-sm font-medium"
+                    className="w-full pl-14 pr-5 py-4 rounded-2xl border border-slate-100 focus:border-primary outline-none transition-all bg-slate-50 font-bold text-ink"
                     required
                   />
                 </div>
               </div>
             </div>
 
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-2 group disabled:opacity-70 text-lg"
+              size="lg"
+              className="w-full"
+              isLoading={loading}
             >
-              {loading ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <>
-                  {mode === 'login' ? 'Log Masuk' : 'Daftar Sekarang'}
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
-            </button>
+              {mode === 'login' ? 'Log Masuk' : 'Daftar Sekarang'}
+              <ArrowRight className="ml-2 w-5 h-5" />
+            </Button>
           </form>
           
           <div className="mt-10 text-center">
-            <p className="text-slate-500 font-medium">
+            <p className="text-ink-muted font-bold">
               {mode === 'login' ? "Belum ada akaun?" : "Sudah ada akaun?"}
               <button 
                 onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-                className="ml-2 text-indigo-600 font-black hover:underline"
+                className="ml-2 text-primary font-black hover:underline"
               >
                 {mode === 'login' ? 'Daftar sini' : 'Log masuk'}
               </button>
             </p>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
