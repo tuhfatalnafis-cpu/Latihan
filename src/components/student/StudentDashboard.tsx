@@ -52,7 +52,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [topicStats, setTopicStats] = useState<Record<string, { total: number, mastered: number, attempted: number, accuracy: number }>>({});
+  const [topicStats, setTopicStats] = useState<Record<string, { total: number, mastered: number, attempted: number, accuracy: number, masteryPercentage: number }>>({});
   const [dashboardStats, setDashboardStats] = useState<{ 
     streak: number, 
     totalQuestions: number,
@@ -64,7 +64,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   }>({ streak: 0, totalQuestions: 0, totalCorrect: 0, totalAttempts: 0, accuracy: 0, totalTimeMs: 0, totalMastered: 0 });
   const [loading, setLoading] = useState(true);
 
-  const [subjectMastery, setSubjectMastery] = useState<Record<string, { percentage: number, total: number, mastered: number, attempted: number }>>({});
+  const [subjectMastery, setSubjectMastery] = useState<Record<string, { percentage: number, accuracy: number, total: number, mastered: number, attempted: number }>>({});
 
   useEffect(() => {
     const init = async () => {
@@ -107,12 +107,18 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         let mastered = 0;
         let attempted = 0;
         let accuracySum = 0;
+        let percentageSum = 0;
+        let topicsWithQuestions = 0;
         let topicsWithAttempts = 0;
         
         for (const s of topicStats) {
           total += s.total;
           mastered += s.mastered;
           attempted += (s as any).attempted || 0;
+          if (s.total > 0) {
+            percentageSum += (s as any).masteryPercentage || 0;
+            topicsWithQuestions++;
+          }
           if ((s as any).attempted > 0) {
             accuracySum += (s as any).accuracy || 0;
             topicsWithAttempts++;
@@ -122,7 +128,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         return { 
           id: subject.id, 
           stats: { 
-            percentage: total > 0 ? Math.round((mastered / total) * 100) : 0,
+            percentage: topicsWithQuestions > 0 ? Math.round(percentageSum / topicsWithQuestions) : 0,
             accuracy: topicsWithAttempts > 0 ? Math.round(accuracySum / topicsWithAttempts) : 0,
             total,
             mastered,
@@ -181,7 +187,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         setTopics(data);
         
         // Parallelize topic stats fetching
-        const stats: Record<string, { total: number, mastered: number, attempted: number, accuracy: number }> = {};
+        const stats: Record<string, { total: number, mastered: number, attempted: number, accuracy: number, masteryPercentage: number }> = {};
         const topicStatsPromises = data.map(async (topic) => {
           const s = await db.topics.getStats(topic.id, user.id);
           return { id: topic.id, stats: s as any };
@@ -443,8 +449,8 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           ))}
 
           {view.type === 'browse_topics' && topics.map(t => {
-            const stats = topicStats[t.id] || { mastered: 0, total: 0, attempted: 0, accuracy: 0 };
-            const percentage = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
+            const stats = topicStats[t.id] || { mastered: 0, total: 0, attempted: 0, accuracy: 0, masteryPercentage: 0 };
+            const percentage = stats.masteryPercentage;
             const attemptedPercentage = stats.total > 0 ? Math.round((stats.attempted / stats.total) * 100) : 0;
             
             return (

@@ -44,8 +44,8 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<SessionMode>('browse');
   const [showSummary, setShowSummary] = useState(false);
-  const [topicStats, setTopicStats] = useState<{ total: number, mastered: number, previousAccuracy: number }>({ total: 0, mastered: 0, previousAccuracy: 0 });
-  const [initialStats, setInitialStats] = useState<{ total: number, mastered: number, previousAccuracy: number } | null>(null);
+  const [topicStats, setTopicStats] = useState<{ total: number, mastered: number, previousAccuracy: number, masteryPercentage?: number }>({ total: 0, mastered: 0, previousAccuracy: 0 });
+  const [initialStats, setInitialStats] = useState<{ total: number, mastered: number, previousAccuracy: number, masteryPercentage?: number } | null>(null);
   const [isFlipped, setIsFlipped] = useState(false); // For flashcards
   const [startTime, setStartTime] = useState<number>(Date.now());
   const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -384,7 +384,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   const renderSummary = () => {
     const score = results.filter(r => r.isCorrect).length;
     const accuracy = Math.round((score / (results.length || 1)) * 100);
-    const masteryPercentage = topicStats.total > 0 ? Math.round((topicStats.mastered / topicStats.total) * 100) : 0;
+    const masteryPercentage = topicStats.masteryPercentage ?? (topicStats.total > 0 ? Math.round((topicStats.mastered / topicStats.total) * 100) : 0);
     
     // Compare current session accuracy vs previous data
     const prevAcc = initialStats?.previousAccuracy ?? 0;

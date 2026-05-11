@@ -311,29 +311,33 @@ export const db = {
       const topicQuestionIds = topicQuestions?.map(q => q.id) || [];
 
       // Get mastered and attempted questions
-      let mastered = 0;
+      let masteredCount = 0;
       let attempted = 0;
+      let progressPoints = 0;
+      
       if (topicQuestionIds.length > 0) {
-        // Mastered: consecutive_correct >= 3
-        const { count: mCount, error: progressError } = await supabase
+        // Fetch progress for all questions in this topic for this student
+        const { data: progressData, error: progressError } = await supabase
           .from('progress')
-          .select('*', { count: 'exact', head: true })
-          .eq('student_id', studentId)
-          .in('question_id', topicQuestionIds)
-          .gte('consecutive_correct', 3);
-        
-        if (progressError) throw progressError;
-        mastered = mCount || 0;
-
-        // Attempted: unique question_id in attempts for this student and topic
-        const { data: attemptedData, error: aError } = await supabase
-          .from('attempts')
-          .select('question_id')
+          .select('question_id, consecutive_correct')
           .eq('student_id', studentId)
           .in('question_id', topicQuestionIds);
         
-        if (aError) throw aError;
-        attempted = new Set(attemptedData?.map(a => a.question_id) || []).size;
+        if (progressError) throw progressError;
+
+        if (progressData) {
+          progressData.forEach(p => {
+            const cc = p.consecutive_correct || 0;
+            progressPoints += Math.min(cc, 3);
+            if (cc >= 3) masteredCount++;
+          });
+        }
+
+        // Attempted: unique question_id in attempts for this student and topic
+        // optimized: just get the count from progress if we assume progress exists for all attempts
+        // but some attempts might not have progress if they are just wrong once? 
+        // No, progress is always upserted.
+        attempted = progressData?.length || 0;
       }
 
       // Get last session accuracy
@@ -356,12 +360,15 @@ export const db = {
         ? Math.round((recentAttempts.filter((a: any) => a.is_correct).length / recentAttempts.length) * 100)
         : 0;
 
+      const masteryPercentage = total > 0 ? Math.round((progressPoints / (total * 3)) * 100) : 0;
+
       return {
         total: total || 0,
-        mastered: mastered,
+        mastered: masteredCount,
+        masteryPercentage: masteryPercentage,
         attempted: attempted,
         accuracy: averageAccuracy,
-        previousAccuracy: averageAccuracy // Maintain backward compatibility or differentiate later
+        previousAccuracy: averageAccuracy // Maintain backward compatibility
       };
     }
   },
