@@ -36,13 +36,16 @@ export const db = {
       return data as Profile;
     },
     async getDashboardStats(id: string) {
-      // 1. Get total questions finished (unique question_id in attempts)
-      const { count: totalQuestions, error: qError } = await supabase
+      // 1. Get total questions attempted (unique question_id)
+      const { data: attemptsData, error: qError } = await supabase
         .from('attempts')
-        .select('question_id', { count: 'exact', head: true })
+        .select('question_id')
         .eq('student_id', id);
 
       if (qError) throw qError;
+      
+      const uniqueQuestionIds = new Set(attemptsData?.map(a => a.question_id) || []);
+      const totalQuestions = uniqueQuestionIds.size;
 
       // 2. Calculate total time
       const { data: timeData, error: tError } = await supabase
@@ -58,6 +61,8 @@ export const db = {
         .select('*', { count: 'exact', head: true })
         .eq('student_id', id)
         .gte('consecutive_correct', 3);
+      
+      if (mError) throw mError;
 
       // 4. Calculate streak
       const { data: days, error: dError } = await supabase
@@ -301,35 +306,44 @@ export const db = {
       if (error) throw error;
     },
     async getStats(id: string, studentId: string) {
-      // Get total questions
-      const { count: total, error: countError } = await supabase
+      // Get total questions for this topic
+      const { data: topicQuestions, error: qError } = await supabase
         .from('questions')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('topic_id', id);
       
-      if (countError) throw countError;
+      if (qError) throw qError;
+      const total = topicQuestions?.length || 0;
+      const topicQuestionIds = topicQuestions?.map(q => q.id) || [];
 
-      // Get mastered questions (consecutive_correct >= 3)
-      const { data: progress, error: progressError } = await supabase
-        .from('progress')
-        .select('*, questions!inner(*)')
-        .eq('student_id', studentId)
-        .eq('questions.topic_id', id)
-        .gte('consecutive_correct', 3);
+      // Get mastered questions (consecutive_correct >= 3 and in this topic)
+      let mastered = 0;
+      if (topicQuestionIds.length > 0) {
+        const { count, error: progressError } = await supabase
+          .from('progress')
+          .select('*', { count: 'exact', head: true })
+          .eq('student_id', studentId)
+          .in('question_id', topicQuestionIds)
+          .gte('consecutive_correct', 3);
+        
+        if (progressError) throw progressError;
+        mastered = count || 0;
+      }
 
-      if (progressError) throw progressError;
-
-      // Get last session accuracy (attempts in the last 24h or last batch)
-      // This is a simple heuristic: find the latest attempts and calculate accuracy
-      const { data: recentAttempts, error: attemptsError } = await supabase
-        .from('attempts')
-        .select('*, questions!inner(topic_id)')
-        .eq('student_id', studentId)
-        .eq('questions.topic_id', id)
-        .order('answered_at', { ascending: false })
-        .limit(50);
-
-      if (attemptsError) throw attemptsError;
+      // Get last session accuracy
+      let recentAttempts: any[] = [];
+      if (topicQuestionIds.length > 0) {
+        const { data, error: attemptsError } = await supabase
+          .from('attempts')
+          .select('is_correct')
+          .eq('student_id', studentId)
+          .in('question_id', topicQuestionIds)
+          .order('answered_at', { ascending: false })
+          .limit(20);
+        
+        if (attemptsError) throw attemptsError;
+        recentAttempts = data || [];
+      }
 
       // Calculate accuracy of previous session
       // For trend, we can split the history if we had session IDs, 
@@ -340,7 +354,7 @@ export const db = {
 
       return {
         total: total || 0,
-        mastered: progress?.length || 0,
+        mastered: mastered,
         previousAccuracy
       };
     }
