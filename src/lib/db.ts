@@ -36,26 +36,21 @@ export const db = {
       return data as Profile;
     },
     async getDashboardStats(id: string) {
-      // 1. Get total questions attempted (unique question_id)
+      // 1. Get all attempts for this user to calculate stats
       const { data: attemptsData, error: qError } = await supabase
         .from('attempts')
-        .select('question_id')
+        .select('question_id, is_correct, response_time_ms, answered_at')
         .eq('student_id', id);
 
       if (qError) throw qError;
       
-      const uniqueQuestionIds = new Set(attemptsData?.map(a => a.question_id) || []);
+      const attempts = attemptsData || [];
+      const uniqueQuestionIds = new Set(attempts.map(a => a.question_id));
       const totalQuestions = uniqueQuestionIds.size;
+      const totalCorrect = attempts.filter(a => a.is_correct).length;
+      const totalTimeMs = attempts.reduce((acc, curr) => acc + (curr.response_time_ms || 0), 0);
 
-      // 2. Calculate total time
-      const { data: timeData, error: tError } = await supabase
-        .from('attempts')
-        .select('response_time_ms')
-        .eq('student_id', id);
-      
-      const totalTimeMs = timeData?.reduce((acc, curr) => acc + (curr.response_time_ms || 0), 0) || 0;
-
-      // 3. Total mastered
+      // 2. Total mastered
       const { count: totalMastered, error: mError } = await supabase
         .from('progress')
         .select('*', { count: 'exact', head: true })
@@ -64,20 +59,13 @@ export const db = {
       
       if (mError) throw mError;
 
-      // 4. Calculate streak
+      // 3. Calculate streak
       const { data: days, error: dError } = await supabase
         .rpc('get_study_days', { user_id_param: id });
       
-      // If RPC is not available, we fall back to a manual query
       let streak = 0;
       if (dError) {
-        const { data: attempts } = await supabase
-          .from('attempts')
-          .select('answered_at')
-          .eq('student_id', id)
-          .order('answered_at', { ascending: false });
-
-        if (attempts && attempts.length > 0) {
+        if (attempts.length > 0) {
           const uniqueDays = new Set(attempts.map(a => a.answered_at.split('T')[0]));
           const sortedDays = Array.from(uniqueDays).sort().reverse();
           
@@ -105,6 +93,7 @@ export const db = {
       return {
         streak,
         totalQuestions: totalQuestions || 0,
+        totalCorrect,
         totalTimeMs,
         totalMastered: totalMastered || 0
       };
@@ -316,10 +305,12 @@ export const db = {
       const total = topicQuestions?.length || 0;
       const topicQuestionIds = topicQuestions?.map(q => q.id) || [];
 
-      // Get mastered questions (consecutive_correct >= 3 and in this topic)
+      // Get mastered and attempted questions
       let mastered = 0;
+      let attempted = 0;
       if (topicQuestionIds.length > 0) {
-        const { count, error: progressError } = await supabase
+        // Mastered: consecutive_correct >= 3
+        const { count: mCount, error: progressError } = await supabase
           .from('progress')
           .select('*', { count: 'exact', head: true })
           .eq('student_id', studentId)
@@ -327,7 +318,17 @@ export const db = {
           .gte('consecutive_correct', 3);
         
         if (progressError) throw progressError;
-        mastered = count || 0;
+        mastered = mCount || 0;
+
+        // Attempted: unique question_id in attempts for this student and topic
+        const { data: attemptedData, error: aError } = await supabase
+          .from('attempts')
+          .select('question_id')
+          .eq('student_id', studentId)
+          .in('question_id', topicQuestionIds);
+        
+        if (aError) throw aError;
+        attempted = new Set(attemptedData?.map(a => a.question_id) || []).size;
       }
 
       // Get last session accuracy
@@ -355,6 +356,7 @@ export const db = {
       return {
         total: total || 0,
         mastered: mastered,
+        attempted: attempted,
         previousAccuracy
       };
     }

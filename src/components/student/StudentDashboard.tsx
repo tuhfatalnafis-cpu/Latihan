@@ -52,16 +52,17 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [topicStats, setTopicStats] = useState<Record<string, { total: number, mastered: number }>>({});
+  const [topicStats, setTopicStats] = useState<Record<string, { total: number, mastered: number, attempted: number }>>({});
   const [dashboardStats, setDashboardStats] = useState<{ 
     streak: number, 
     totalQuestions: number,
+    totalCorrect: number,
     totalTimeMs: number,
     totalMastered: number
-  }>({ streak: 0, totalQuestions: 0, totalTimeMs: 0, totalMastered: 0 });
+  }>({ streak: 0, totalQuestions: 0, totalCorrect: 0, totalTimeMs: 0, totalMastered: 0 });
   const [loading, setLoading] = useState(true);
 
-  const [subjectMastery, setSubjectMastery] = useState<Record<string, number>>({});
+  const [subjectMastery, setSubjectMastery] = useState<Record<string, { percentage: number, total: number, mastered: number, attempted: number }>>({});
 
   useEffect(() => {
     const init = async () => {
@@ -79,47 +80,55 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
 
   const fetchSubjectMastery = async () => {
     try {
-      const mastery: Record<string, number> = {};
+      const mastery: Record<string, { percentage: number, total: number, mastered: number, attempted: number }> = {};
       
       const subjectStatsPromises = subjects.map(async (subject) => {
         // Find topics for this subject
         const subjectSyllabi = await db.syllabi.listForSubject(subject.id);
-        const subjectTopicIds: string[] = [];
-        for (const syllabus of subjectSyllabi) {
-          const syllabusTopics = await db.topics.listForSyllabus(syllabus.id);
-          subjectTopicIds.push(...syllabusTopics.map(t => t.id));
-        }
+        
+        // Parallelize fetching topics for all syllabi
+        const allTopicsResults = await Promise.all(
+          subjectSyllabi.map(s => db.topics.listForSyllabus(s.id))
+        );
+        const subjectTopicIds = allTopicsResults.flat().map(t => t.id);
 
         if (subjectTopicIds.length === 0) {
-          return { id: subject.id, value: 0 };
+          return { id: subject.id, stats: { percentage: 0, total: 0, mastered: 0, attempted: 0 } };
         }
 
-        // Total questions in these topics
-        let totalQuestions = 0;
-        let masteredQuestions = 0;
-        
-        // Use Promise.all to fetch topic stats in parallel
+        // Parallelize fetching stats for all topics
         const topicStats = await Promise.all(
           subjectTopicIds.map(topicId => db.topics.getStats(topicId, user.id))
         );
 
-        for (const stats of topicStats) {
-          totalQuestions += stats.total;
-          masteredQuestions += stats.mastered;
+        let total = 0;
+        let mastered = 0;
+        let attempted = 0;
+        
+        for (const s of topicStats) {
+          total += s.total;
+          mastered += s.mastered;
+          attempted += (s as any).attempted || 0;
         }
 
         return { 
           id: subject.id, 
-          value: totalQuestions > 0 ? Math.round((masteredQuestions / totalQuestions) * 100) : 0 
+          stats: { 
+            percentage: total > 0 ? Math.round((mastered / total) * 100) : 0,
+            total,
+            mastered,
+            attempted
+          } 
         };
       });
 
       const results = await Promise.all(subjectStatsPromises);
+      const masteryMap: Record<string, any> = {};
       results.forEach(res => {
-        mastery[res.id] = res.value;
+        masteryMap[res.id] = res.stats;
       });
       
-      setSubjectMastery(mastery);
+      setSubjectMastery(masteryMap);
     } catch (err) {
       console.error('Error fetching subject mastery:', err);
     }
@@ -146,14 +155,16 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   };
 
   const fetchData = async () => {
-    if (activeTab !== 'subjects' && activeTab !== 'dashboard') return;
+    if (activeTab !== 'subjects' && activeTab !== 'dashboard' && activeTab !== 'progress') return;
     
     setLoading(true);
     try {
-      if (view.type === 'browse_subjects') {
+      if (view.type === 'browse_subjects' || activeTab === 'progress') {
         const data = await db.subjects.list();
         setSubjects(data);
-      } else if (view.type === 'browse_syllabi') {
+      }
+      
+      if (view.type === 'browse_syllabi') {
         const data = await db.syllabi.listForSubject(view.subject.id);
         setSyllabi(data);
       } else if (view.type === 'browse_topics') {
@@ -161,10 +172,10 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         setTopics(data);
         
         // Parallelize topic stats fetching
-        const stats: Record<string, { total: number, mastered: number }> = {};
+        const stats: Record<string, { total: number, mastered: number, attempted: number }> = {};
         const topicStatsPromises = data.map(async (topic) => {
           const s = await db.topics.getStats(topic.id, user.id);
-          return { id: topic.id, stats: s };
+          return { id: topic.id, stats: s as any };
         });
         
         const results = await Promise.all(topicStatsPromises);
@@ -411,8 +422,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           ))}
 
           {view.type === 'browse_topics' && topics.map(t => {
-            const stats = topicStats[t.id] || { mastered: 0, total: 0 };
+            const stats = topicStats[t.id] || { mastered: 0, total: 0, attempted: 0 };
             const percentage = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
+            const attemptedPercentage = stats.total > 0 ? Math.round((stats.attempted / stats.total) * 100) : 0;
             
             return (
               <Card 
@@ -426,17 +438,23 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                      <BrainCircuit className="w-7 h-7" />
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest">{stats.total} Kosa Kata</p>
+                    <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest">{stats.mastered} / {stats.total} dikuasai</p>
                     <p className="text-xl font-black text-emerald-600">{percentage}%</p>
                   </div>
                 </div>
                 <h4 className="text-2xl font-black text-ink mb-6 leading-tight tracking-tight">{t.name}</h4>
-                <div className="w-full h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                <div className="w-full h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100 relative">
+                  {/* Attempted */}
+                  <div 
+                    className="absolute inset-x-0 h-full bg-accent-mint/20"
+                    style={{ width: `${attemptedPercentage}%` }}
+                  />
+                  {/* Mastered */}
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: `${percentage}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
-                    className="h-full bg-accent-mint shadow-soft-sm"
+                    className="h-full bg-accent-mint shadow-soft-sm relative z-10"
                   />
                 </div>
               </Card>
@@ -470,7 +488,9 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
 
       <div className="grid grid-cols-2 gap-4">
         <StatCard label="Masa Belajar" value={formatTime(dashboardStats.totalTimeMs)} icon={Clock} variant="mint" />
-        <StatCard label="Pencapaian" value={dashboardStats.totalMastered} icon={Trophy} variant="warm" />
+        <StatCard label="Soalan Betul" value={dashboardStats.totalCorrect} icon={Target} variant="lilac" />
+        <StatCard label="Selesai Masteri" value={dashboardStats.totalMastered} icon={Trophy} variant="warm" />
+        <StatCard label="Jumlah Soalan" value={dashboardStats.totalQuestions} icon={CheckCircle} variant="primary" />
       </div>
 
       <Card className="border-2 border-slate-50">
@@ -482,18 +502,29 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         </h4>
         <div className="space-y-8">
           {subjects.map(s => {
-            const mastery = subjectMastery[s.id] || 0;
+            const stats = subjectMastery[s.id] || { percentage: 0, total: 0, mastered: 0, attempted: 0 };
             return (
               <div key={s.id} className="space-y-3">
                 <div className="flex justify-between text-sm items-center">
-                  <span className="font-black text-ink text-lg">{s.name}</span>
-                  <span className="font-black text-primary bg-primary/5 px-3 py-1 rounded-full">{mastery}%</span>
+                  <div>
+                    <span className="font-black text-ink text-lg block">{s.name}</span>
+                    <span className="text-[10px] font-black text-ink-muted uppercase tracking-wider">
+                      {stats.mastered} dikuasai • {stats.attempted} dicuba • {stats.total} jumlah
+                    </span>
+                  </div>
+                  <span className="font-black text-primary bg-primary/5 px-3 py-1 rounded-full">{stats.percentage}%</span>
                 </div>
-                <div className="w-full h-3 bg-slate-50 rounded-full border border-slate-100 overflow-hidden">
+                <div className="w-full h-3 bg-slate-50 rounded-full border border-slate-100 overflow-hidden relative">
+                  {/* Attempted progress (lighter) */}
+                  <div 
+                    className="absolute inset-x-0 h-full bg-primary/20"
+                    style={{ width: `${stats.total > 0 ? (stats.attempted / stats.total) * 100 : 0}%` }}
+                  />
+                  {/* Mastered progress (darker) */}
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: `${mastery}%` }}
-                    className="h-full bg-primary shadow-soft-sm" 
+                    animate={{ width: `${stats.percentage}%` }}
+                    className="h-full bg-primary shadow-soft-sm relative z-10" 
                   />
                 </div>
               </div>
