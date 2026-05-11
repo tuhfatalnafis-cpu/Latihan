@@ -64,23 +64,24 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [subjectMastery, setSubjectMastery] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    fetchData();
-    if (activeTab === 'dashboard' || activeTab === 'progress') {
+    const init = async () => {
+      await fetchData();
       fetchDashboardStats();
-    }
-    if (activeTab === 'progress') {
+    };
+    init();
+  }, [view, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'progress' && subjects.length > 0) {
       fetchSubjectMastery();
     }
-  }, [view, activeTab]);
+  }, [activeTab, subjects]);
 
   const fetchSubjectMastery = async () => {
     try {
       const mastery: Record<string, number> = {};
       
-      // Get all progress for this user
-      const userProgress = await db.progress.listForUser(user.id);
-      
-      for (const subject of subjects) {
+      const subjectStatsPromises = subjects.map(async (subject) => {
         // Find topics for this subject
         const subjectSyllabi = await db.syllabi.listForSubject(subject.id);
         const subjectTopicIds: string[] = [];
@@ -90,25 +91,37 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         }
 
         if (subjectTopicIds.length === 0) {
-          mastery[subject.id] = 0;
-          continue;
+          return { id: subject.id, value: 0 };
         }
 
         // Total questions in these topics
         let totalQuestions = 0;
         let masteredQuestions = 0;
         
-        for (const topicId of subjectTopicIds) {
-          const stats = await db.topics.getStats(topicId, user.id);
+        // Use Promise.all to fetch topic stats in parallel
+        const topicStats = await Promise.all(
+          subjectTopicIds.map(topicId => db.topics.getStats(topicId, user.id))
+        );
+
+        for (const stats of topicStats) {
           totalQuestions += stats.total;
           masteredQuestions += stats.mastered;
         }
 
-        mastery[subject.id] = totalQuestions > 0 ? Math.round((masteredQuestions / totalQuestions) * 100) : 0;
-      }
+        return { 
+          id: subject.id, 
+          value: totalQuestions > 0 ? Math.round((masteredQuestions / totalQuestions) * 100) : 0 
+        };
+      });
+
+      const results = await Promise.all(subjectStatsPromises);
+      results.forEach(res => {
+        mastery[res.id] = res.value;
+      });
+      
       setSubjectMastery(mastery);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching subject mastery:', err);
     }
   };
 
@@ -147,11 +160,18 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         const data = await db.topics.listForSyllabus(view.syllabus.id);
         setTopics(data);
         
+        // Parallelize topic stats fetching
         const stats: Record<string, { total: number, mastered: number }> = {};
-        for (const topic of data) {
+        const topicStatsPromises = data.map(async (topic) => {
           const s = await db.topics.getStats(topic.id, user.id);
-          stats[topic.id] = s;
-        }
+          return { id: topic.id, stats: s };
+        });
+        
+        const results = await Promise.all(topicStatsPromises);
+        results.forEach(res => {
+          stats[res.id] = res.stats;
+        });
+        
         setTopicStats(stats);
       }
     } catch (err) {

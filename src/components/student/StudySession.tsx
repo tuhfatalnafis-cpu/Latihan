@@ -45,6 +45,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   const [mode, setMode] = useState<SessionMode>('browse');
   const [showSummary, setShowSummary] = useState(false);
   const [topicStats, setTopicStats] = useState<{ total: number, mastered: number, previousAccuracy: number }>({ total: 0, mastered: 0, previousAccuracy: 0 });
+  const [initialStats, setInitialStats] = useState<{ total: number, mastered: number, previousAccuracy: number } | null>(null);
   const [isFlipped, setIsFlipped] = useState(false); // For flashcards
   const [startTime, setStartTime] = useState<number>(Date.now());
   const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -53,7 +54,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
 
   useEffect(() => {
     fetchQuestions();
-    fetchTopicStats();
+    fetchTopicStats(true);
   }, [topic.id, mode]);
 
   useEffect(() => {
@@ -70,10 +71,11 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const fetchTopicStats = async () => {
+  const fetchTopicStats = async (isInitial = false) => {
     try {
       const stats = await db.topics.getStats(topic.id, user.id);
       setTopicStats(stats);
+      if (isInitial) setInitialStats(stats);
     } catch (err) {
       console.error(err);
     }
@@ -152,6 +154,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
       );
       
       const updated = await db.progress.upsert({
+        id: existingProgress?.id, // Ensure we update the existing record if it exists
         student_id: user.id,
         question_id: currentQuestion.id,
         ...srsResult
@@ -377,8 +380,11 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     const accuracy = Math.round((score / (results.length || 1)) * 100);
     const masteryPercentage = topicStats.total > 0 ? Math.round((topicStats.mastered / topicStats.total) * 100) : 0;
     
-    const trend = accuracy - (topicStats.previousAccuracy || 0);
-    const isImproved = trend > 0;
+    // Compare current session accuracy vs topic lifetime accuracy before this session
+    const prevAcc = initialStats?.previousAccuracy ?? 0;
+    const trend = accuracy - prevAcc;
+    const isImproved = trend >= 0;
+    const showTrend = results.length > 0 && Math.abs(trend) > 1 && prevAcc > 0;
 
     return (
       <Card className="max-w-md w-full bg-white text-center animate-in zoom-in duration-500" padding="lg">
@@ -397,7 +403,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
               <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest mb-1">Akurasi</p>
               <div className="flex items-center justify-center gap-2">
                 <p className="text-3xl font-black text-primary">{accuracy}%</p>
-                {results.length > 0 && Math.abs(trend) > 5 && (
+                {showTrend && (
                   <div className={cn(
                     "flex items-center text-[10px] font-black px-1.5 py-0.5 rounded-lg",
                     isImproved ? "bg-accent-mint/20 text-emerald-600" : "bg-rose-100 text-rose-500"
