@@ -46,8 +46,11 @@ export const db = {
       
       const attempts = attemptsData || [];
       const uniqueQuestionIds = new Set(attempts.map(a => a.question_id));
-      const totalQuestions = uniqueQuestionIds.size;
-      const totalCorrect = attempts.filter(a => a.is_correct).length;
+      const totalQuestionsAttempted = uniqueQuestionIds.size;
+      const totalAttempts = attempts.length;
+      const totalCorrectAttempts = attempts.filter(a => a.is_correct).length;
+      const overallAccuracy = totalAttempts > 0 ? Math.round((totalCorrectAttempts / totalAttempts) * 100) : 0;
+      
       const totalTimeMs = attempts.reduce((acc, curr) => acc + (curr.response_time_ms || 0), 0);
 
       // 2. Total mastered
@@ -92,8 +95,10 @@ export const db = {
 
       return {
         streak,
-        totalQuestions: totalQuestions || 0,
-        totalCorrect,
+        totalQuestions: totalQuestionsAttempted || 0,
+        totalCorrect: totalCorrectAttempts,
+        totalAttempts,
+        accuracy: overallAccuracy,
         totalTimeMs,
         totalMastered: totalMastered || 0
       };
@@ -346,18 +351,17 @@ export const db = {
         recentAttempts = data || [];
       }
 
-      // Calculate accuracy of previous session
-      // For trend, we can split the history if we had session IDs, 
-      // but we can just compare last 20 with previous 20 or similar.
-      const previousAccuracy = recentAttempts && recentAttempts.length > 0
-        ? (recentAttempts.filter((a: any) => a.is_correct).length / recentAttempts.length) * 100
+      // Calculate average accuracy
+      const averageAccuracy = recentAttempts && recentAttempts.length > 0
+        ? Math.round((recentAttempts.filter((a: any) => a.is_correct).length / recentAttempts.length) * 100)
         : 0;
 
       return {
         total: total || 0,
         mastered: mastered,
         attempted: attempted,
-        previousAccuracy
+        accuracy: averageAccuracy,
+        previousAccuracy: averageAccuracy // Maintain backward compatibility or differentiate later
       };
     }
   },

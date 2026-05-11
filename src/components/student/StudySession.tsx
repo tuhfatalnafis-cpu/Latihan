@@ -137,15 +137,22 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     setFeedback(isCorrect ? 'correct' : 'wrong');
     setIsMastered(false);
 
-    try {
-      await db.attempts.record({
-        student_id: user.id,
-        question_id: currentQuestion.id,
-        is_correct: isCorrect,
-        response_time_ms: timeSpent
-      });
+    // Optimized results tracking
+    const newResults = [...results, { questionId: currentQuestion.id, isCorrect }];
+    setResults(newResults);
 
-      const existingProgress = await db.progress.get(user.id, currentQuestion.id);
+    try {
+      // Parallelize recording attempt and fetching/updating progress
+      const [recordRes, existingProgress] = await Promise.all([
+        db.attempts.record({
+          student_id: user.id,
+          question_id: currentQuestion.id,
+          is_correct: isCorrect,
+          response_time_ms: timeSpent
+        }),
+        db.progress.get(user.id, currentQuestion.id)
+      ]);
+
       const srsResult = sm2(
         isCorrect, 
         existingProgress?.ease, 
@@ -154,7 +161,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
       );
       
       const updated = await db.progress.upsert({
-        id: existingProgress?.id, // Ensure we update the existing record if it exists
+        id: existingProgress?.id,
         student_id: user.id,
         question_id: currentQuestion.id,
         ...srsResult
@@ -163,10 +170,9 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
       if (isCorrect && updated.consecutive_correct === 3) {
         setIsMastered(true);
       }
-
-      setResults([...results, { questionId: currentQuestion.id, isCorrect }]);
     } catch (err) {
       console.error('Save result error:', err);
+      toast.error('Gagal menyimpan kemajuan. Sila periksa internet.');
     }
   };
 
@@ -380,11 +386,12 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     const accuracy = Math.round((score / (results.length || 1)) * 100);
     const masteryPercentage = topicStats.total > 0 ? Math.round((topicStats.mastered / topicStats.total) * 100) : 0;
     
-    // Compare current session accuracy vs topic lifetime accuracy before this session
+    // Compare current session accuracy vs previous data
     const prevAcc = initialStats?.previousAccuracy ?? 0;
     const trend = accuracy - prevAcc;
     const isImproved = trend >= 0;
-    const showTrend = results.length > 0 && Math.abs(trend) > 1 && prevAcc > 0;
+    // Show trend if we have previous data OR if it's the first time and accuracy is significant
+    const showTrend = results.length > 0 && (prevAcc > 0 ? Math.abs(trend) > 0.1 : accuracy > 0);
 
     return (
       <Card className="max-w-md w-full bg-white text-center animate-in zoom-in duration-500" padding="lg">
