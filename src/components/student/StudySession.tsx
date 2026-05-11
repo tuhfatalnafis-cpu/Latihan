@@ -22,6 +22,7 @@ import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { Mascot } from './Mascot';
 import { STRINGS } from '../../lib/strings';
 
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -394,9 +395,15 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     const showTrend = results.length > 0 && (prevAcc > 0 ? Math.abs(trend) > 0.1 : accuracy > 0);
 
     return (
-      <Card className="max-w-md w-full bg-white text-center animate-in zoom-in duration-500" padding="lg">
-        <div className="w-24 h-24 bg-accent-warm/10 text-accent-warm rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 animate-bounce">
-           <Trophy className="w-12 h-12" />
+      <Card className="max-w-md w-full bg-white text-center animate-in zoom-in duration-500 overflow-visible" padding="lg">
+        <div className="relative mb-14">
+           {/* Mascot Result */}
+           <div className="absolute -top-24 left-1/2 -translate-x-1/2 z-0">
+              <Mascot gender={user.metadata?.gender} className="size-44" animate="pulse" />
+           </div>
+           <div className="w-20 h-20 bg-accent-warm/10 text-accent-warm rounded-[2rem] flex items-center justify-center mx-auto relative z-10 shadow-soft-lg border-4 border-white bg-white">
+              <Trophy className="w-10 h-10" />
+           </div>
         </div>
         <h2 className="text-4xl font-black text-ink mb-2">Sesi Tamat!</h2>
         <p className="text-ink-muted font-bold mb-10 italic">Hebat! Anda telah menyelesaikan sesi hafal hari ini.</p>
@@ -497,13 +504,24 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
         <div className="w-full max-w-5xl flex flex-col items-center justify-start pt-4 sm:pt-10">
           {loading ? (
             <div className="flex flex-col items-center gap-6 text-ink-muted pt-20 animate-in fade-in zoom-in">
-              <div className="w-20 h-20 bg-white rounded-3xl shadow-soft flex items-center justify-center animate-pulse">
-                <BrainCircuit className="w-10 h-10 text-primary" />
+              <div className="w-24 h-24 bg-white rounded-3xl shadow-soft flex items-center justify-center animate-pulse overflow-hidden">
+                <Mascot gender={user.metadata?.gender} className="size-20" />
               </div>
               <p className="font-black text-lg">Membuka lembaran baru...</p>
             </div>
           ) : showSummary ? (
             renderSummary()
+          ) : questions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center py-20 px-8 animate-in fade-in slide-in-from-bottom-8">
+              <Mascot gender={user.metadata?.gender} className="size-48 mb-6" />
+              <h3 className="text-3xl font-black text-ink mb-3">Tiada soalan tersedia!</h3>
+              <p className="text-ink-muted font-bold max-w-sm">
+                Kandungan untuk topik ini sedang disediakan atau anda telah menyelesaikan sesi hari ini.
+              </p>
+              <Button variant="ghost" className="mt-8 font-black text-primary px-8" onClick={onClose}>
+                <ChevronRight className="w-5 h-5 rotate-180 mr-2" /> Kembali ke Dashboard
+              </Button>
+            </div>
           ) : (
             <div className="w-full flex-1 flex flex-col items-center justify-start animate-in slide-in-from-bottom-8 duration-500">
                {renderQuestion()}

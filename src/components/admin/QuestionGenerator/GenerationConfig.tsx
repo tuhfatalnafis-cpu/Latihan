@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { BrainCircuit, ChevronRight, AlertCircle, Sparkles, Database } from 'lucide-react';
+import { BrainCircuit, ChevronRight, AlertCircle, Sparkles, Database, Upload, FileText, ImageIcon, X, Loader2 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { GenConfig } from '../../../lib/questionGenerator';
+import { toast } from 'sonner';
 
 interface Step1Props {
   libSize: number;
-  onNext: (config: { name: string; prompt?: string } & GenConfig & { strategy: 'random' | 'ai' | 'pure_ai' }) => void;
+  onNext: (config: { name: string; prompt?: string, files?: { data: string; mimeType: string }[] } & GenConfig & { strategy: 'random' | 'ai' | 'pure_ai' }) => void;
   onCancel: () => void;
 }
 
@@ -16,9 +17,51 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
   const [direction, setDirection] = useState<'ar_to_ms' | 'ms_to_ar' | 'both'>('both');
   const [strategy, setStrategy] = useState<'random' | 'ai' | 'pure_ai'>(libSize > 0 ? 'random' : 'pure_ai');
   const [prompt, setPrompt] = useState('');
+  const [files, setFiles] = useState<{ data: string; mimeType: string, name: string }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const hasAIKey = !!process.env.GEMINI_API_KEY;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles) return;
+
+    setIsUploading(true);
+    const newFiles: { data: string; mimeType: string, name: string }[] = [];
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+       const file = selectedFiles[i];
+       if (file.size > 10 * 1024 * 1024) {
+         toast.error(`Fail ${file.name} terlalu besar (max 10MB)`);
+         continue;
+       }
+
+       const reader = new FileReader();
+       const promise = new Promise<void>((resolve) => {
+         reader.onload = (e) => {
+           if (e.target?.result) {
+             newFiles.push({
+               data: e.target.result as string,
+               mimeType: file.type,
+               name: file.name
+             });
+           }
+           resolve();
+         };
+       });
+       reader.readAsDataURL(file);
+       await promise;
+    }
+
+    setFiles(prev => [...prev, ...newFiles]);
+    setIsUploading(false);
+    if (strategy !== 'pure_ai') setStrategy('pure_ai');
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleNext = () => {
     if (!name.trim()) return setError('Sila masukkan nama set soalan.');
@@ -27,11 +70,11 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
       if (libSize < 4) return setError('Pustaka memerlukan sekurang-kurangnya 4 perkataan.');
       if (count > libSize * 2) return setError(`Bilangan soalan tidak boleh melebihi ${libSize * 2} (2x saiz pustaka).`);
     } else {
-      if (!prompt.trim()) return setError('Sila masukkan topik atau arahan untuk AI.');
+      if (!prompt.trim() && files.length === 0) return setError('Sila masukkan topik atau muat naik fail untuk AI.');
     }
     
     setError(null);
-    onNext({ name, count, direction, strategy, prompt });
+    onNext({ name, count, direction, strategy, prompt, files: files.map(f => ({ data: f.data, mimeType: f.mimeType })) });
   };
 
   return (
@@ -146,15 +189,51 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
               <motion.div 
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                className="pt-2"
+                className="pt-2 space-y-4"
               >
-                <label className="block text-[10px] font-black text-primary uppercase tracking-widest mb-2 px-2">Topik atau Fokus Soalan</label>
-                <textarea 
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Contoh: Peralatan dapur dalam Arab, Sifat-sifat terpuji, Warna-warna..."
-                  className="w-full px-5 py-4 bg-primary/5 border-2 border-primary/20 rounded-2xl font-bold text-slate-800 outline-none focus:border-primary transition-all min-h-[100px]"
-                />
+                <div>
+                  <label className="block text-[10px] font-black text-primary uppercase tracking-widest mb-2 px-2">Muat Naik Fail (PDF/Imej)</label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {files.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider group relative">
+                        {file.mimeType.includes('pdf') ? <FileText className="w-3.3 h-3.3" /> : <ImageIcon className="w-3.3 h-3.3" />}
+                        <span className="max-w-[100px] truncate">{file.name}</span>
+                        <button 
+                          onClick={() => removeFile(idx)}
+                          className="hover:text-rose-500 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <label className="cursor-pointer">
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="application/pdf,image/*" 
+                        multiple 
+                        onChange={handleFileChange}
+                      />
+                      <div className="flex items-center gap-2 border-2 border-dashed border-primary/30 text-primary/60 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-primary/5 hover:border-primary/50 transition-all">
+                        {isUploading ? <Loader2 className="w-3.3 h-3.3 animate-spin" /> : <Upload className="w-3.3 h-3.3" />}
+                        <span>Tambah Fail</span>
+                      </div>
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-bold px-2 italic mb-3">
+                    AI akan menggunakan kandungan fail ini untuk menjana soalan.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-primary uppercase tracking-widest mb-2 px-2">Topik atau Arahan Tambahan</label>
+                  <textarea 
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder={files.length > 0 ? "Contoh: Fokus kepada kosa kata perniagaan dalam fail ini..." : "Contoh: Peralatan dapur dalam Arab, Sifat-sifat terpuji, Warna-warna..."}
+                    className="w-full px-5 py-4 bg-primary/5 border-2 border-primary/20 rounded-2xl font-bold text-slate-800 outline-none focus:border-primary transition-all min-h-[100px]"
+                  />
+                </div>
               </motion.div>
             )}
 

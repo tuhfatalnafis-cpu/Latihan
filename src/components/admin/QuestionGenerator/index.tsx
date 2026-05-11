@@ -4,7 +4,7 @@ import { X, BrainCircuit, Loader2 } from 'lucide-react';
 import GenerationConfig from './GenerationConfig';
 import GenerationPreview from './GenerationPreview';
 import { VocabRow, GenConfig, GeneratedMCQ, generateMCQs } from '../../../lib/questionGenerator';
-import { generateQuestionsFromPrompt } from '../../../lib/aiQuestionService';
+import { generateQuestionsWithFiles } from '../../../lib/aiQuestionService';
 import { enhanceDistractors } from '../../../lib/aiQuestionEnhancer';
 import { db } from '../../../lib/db';
 import { toast } from 'sonner';
@@ -19,12 +19,12 @@ interface QuestionGeneratorProps {
 
 export default function QuestionGenerator({ topicId, userId, library, onClose, onComplete }: QuestionGeneratorProps) {
   const [step, setStep] = useState(1);
-  const [config, setConfig] = useState<{ name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string } & GenConfig | null>(null);
+  const [config, setConfig] = useState<{ name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string; files?: { data: string; mimeType: string }[] } & GenConfig | null>(null);
   const [questions, setQuestions] = useState<GeneratedMCQ[]>([]);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhanceProgress, setEnhanceProgress] = useState(0);
 
-  const handleConfigComplete = async (newConfig: { name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string } & GenConfig) => {
+  const handleConfigComplete = async (newConfig: { name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string; files?: { data: string; mimeType: string }[] } & GenConfig) => {
     setConfig(newConfig);
     setStep(2);
     
@@ -32,7 +32,7 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
       setIsEnhancing(true);
       setEnhanceProgress(10);
       try {
-        const aiQuestions = await generateQuestionsFromPrompt(newConfig.prompt || '', newConfig.count);
+        const aiQuestions = await generateQuestionsWithFiles(newConfig.prompt || '', newConfig.files || [], newConfig.count);
         setQuestions(aiQuestions);
       } catch (err: any) {
         toast.error('Gagal menjana soalan AI: ' + err.message);

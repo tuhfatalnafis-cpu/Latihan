@@ -31,11 +31,13 @@ export default function StudentManager() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Profile | null>(null);
   
-  // New user form
+  // New user form/Edit form
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [studentStats, setStudentStats] = useState<Record<string, { activeTopics: number, accuracy: number }>>({});
@@ -109,14 +111,71 @@ export default function StudentManager() {
 
       if (error) throw error;
       
+      // Explicitly update the profile to ensure metadata.gender is saved
+      // This bypasses potential trigger limitations
+      if (data.user) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            metadata: { gender: gender }
+          } as any)
+          .eq('id', data.user.id);
+        
+        if (updateError) {
+          console.error('Failed to update profile metadata:', updateError);
+        }
+      }
+      
       toast.success(`Akaun untuk ${fullName} telah dicipta. Sila kongsi emel dan kata laluan kepada pelajar.`);
       setShowAddModal(false);
-      setEmail('');
-      setPassword('');
-      setFullName('');
+      resetForm();
       fetchStudents();
     } catch (err) {
       toast.error('Gagal menambah pelajar: ' + (err as any).message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setFullName('');
+    setGender(null);
+    setEditingStudent(null);
+  };
+
+  const handleEditClick = (student: Profile) => {
+    setEditingStudent(student);
+    setFullName(student.full_name);
+    setGender(student.metadata?.gender || null);
+    // password and email not editable here for simplicity
+  };
+
+  const handleUpdateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          metadata: { 
+            ...(editingStudent.metadata || {}),
+            gender: gender 
+          }
+        } as any)
+        .eq('id', editingStudent.id);
+
+      if (error) throw error;
+      
+      toast.success(`Profil ${fullName} telah dikemaskini.`);
+      setEditingStudent(null);
+      resetForm();
+      fetchStudents();
+    } catch (err) {
+      toast.error('Gagal mengemaskini pelajar: ' + (err as any).message);
     } finally {
       setIsSubmitting(false);
     }
@@ -223,6 +282,9 @@ export default function StudentManager() {
                        </div>
                        <div>
                          <h5 className="font-black text-ink text-xl leading-tight group-hover:text-primary transition-colors">{s.full_name}</h5>
+                         <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mt-1">
+                            DEBUG: {s.metadata?.gender === 'female' ? 'Perempuan' : s.metadata?.gender === 'male' ? 'Lelaki' : 'Tidak nyatakan'}
+                         </p>
                          <div className="flex items-center gap-4 mt-2">
                            <p className="text-ink-muted text-xs font-bold flex items-center gap-1.5">
                              <GraduationCap className="w-3.5 h-3.5 text-accent-warm" />
@@ -238,6 +300,14 @@ export default function StudentManager() {
                     </div>
 
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                       <Button 
+                         variant="ghost" 
+                         onClick={() => handleEditClick(s)}
+                         className="px-6 rounded-2xl hover:bg-white hover:shadow-soft border-2 border-transparent hover:border-slate-50"
+                       >
+                         <UserCheck className="w-5 h-5 mr-2 text-primary" />
+                         Edit Jantina
+                       </Button>
                        <Button 
                          variant="ghost" 
                          className="px-6 rounded-2xl hover:bg-white hover:shadow-soft border-2 border-transparent hover:border-slate-50"
@@ -259,6 +329,74 @@ export default function StudentManager() {
           </Card>
         </div>
       </div>
+
+      {/* Edit Student Modal */}
+      <AnimatePresence>
+        {editingStudent && (
+          <div className="fixed inset-0 bg-ink/40 backdrop-blur-md z-[110] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-soft-2xl relative overflow-hidden"
+            >
+               <div className="relative z-10">
+                  <h3 className="text-3xl font-black text-ink mb-2">Edit Profil Pelajar</h3>
+                  <p className="text-ink-muted font-bold mb-8 text-sm leading-relaxed">Kemaskini maklumat asas dan jantina untuk paparan mascot yang betul.</p>
+                  
+                  <form onSubmit={handleUpdateStudent} className="space-y-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-ink-muted uppercase tracking-[0.2em] mb-3 ml-2">Nama Penuh Pelajar</label>
+                      <div className="relative group">
+                        <Users className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted group-focus-within:text-primary transition-all" />
+                        <input 
+                          type="text" 
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="Ali bin Ahmad"
+                          className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-[1.2rem] focus:bg-white focus:border-primary outline-none transition-all font-bold text-ink"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                       <label className="block text-[10px] font-black text-ink-muted uppercase tracking-[0.2em] mb-3 ml-2">Jantina</label>
+                       <select 
+                         value={gender || ''} 
+                         onChange={(e) => setGender(e.target.value as any || null)}
+                         className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-[1.2rem] focus:bg-white focus:border-primary outline-none transition-all font-bold text-ink appearance-none"
+                       >
+                         <option value="">Tidak nyatakan (Lelaki sebagai default)</option>
+                         <option value="male">Lelaki</option>
+                         <option value="female">Perempuan</option>
+                       </select>
+                    </div>
+
+                    <div className="pt-6 flex gap-4">
+                      <Button 
+                        variant="ghost"
+                        className="flex-1 h-14 rounded-2xl"
+                        onClick={() => setEditingStudent(null)}
+                        type="button"
+                      >
+                        Batal
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className="flex-1 h-14 rounded-2xl shadow-soft"
+                      >
+                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Simpan'}
+                      </Button>
+                    </div>
+                  </form>
+               </div>
+               <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full -mr-24 -mt-24 pointer-events-none" />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Add Student Modal */}
       <AnimatePresence>
@@ -318,6 +456,19 @@ export default function StudentManager() {
                            required
                          />
                        </div>
+                    </div>
+
+                    <div>
+                       <label className="block text-[10px] font-black text-ink-muted uppercase tracking-[0.2em] mb-3 ml-2">Jantina</label>
+                       <select 
+                         value={gender || ''} 
+                         onChange={(e) => setGender(e.target.value as any || null)}
+                         className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-[1.2rem] focus:bg-white focus:border-primary outline-none transition-all font-bold text-ink appearance-none"
+                       >
+                         <option value="">Tidak nyatakan (Lelaki sebagai default)</option>
+                         <option value="male">Lelaki</option>
+                         <option value="female">Perempuan</option>
+                       </select>
                     </div>
 
                     <div className="pt-6 flex gap-4">

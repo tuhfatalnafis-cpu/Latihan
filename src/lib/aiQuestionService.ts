@@ -8,6 +8,14 @@ export async function generateQuestionsFromPrompt(
   prompt: string, 
   count: number = 20
 ): Promise<GeneratedMCQ[]> {
+  return generateQuestionsWithFiles(prompt, [], count);
+}
+
+export async function generateQuestionsWithFiles(
+  prompt: string,
+  files: { data: string; mimeType: string }[],
+  count: number = 20
+): Promise<GeneratedMCQ[]> {
   if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
   const systemInstruction = `
@@ -21,11 +29,24 @@ export async function generateQuestionsFromPrompt(
   `;
 
   try {
-    console.log(`Generating up to ${count} questions for: ${prompt}...`);
-    
+    const fileParts = files.map(f => ({
+      inlineData: {
+        data: f.data.split(',')[1] || f.data, // Strip data:mime/type;base64, if present
+        mimeType: f.mimeType
+      }
+    }));
+
+    const textPart = {
+      text: `Generate ${Math.min(count, 25)} Arabic-Malay vocabulary MCQs based on the provided context/files. 
+             Focus or Topic Instruction: "${prompt}". 
+             Keep prompts and answers short.`
+    };
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Generate ${Math.min(count, 25)} Arabic-Malay vocabulary MCQs for: "${prompt}". Keep prompts and answers short.`,
+      contents: { 
+        parts: [...fileParts, textPart]
+      },
       config: {
         systemInstruction,
         temperature: 0.7,

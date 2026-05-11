@@ -107,7 +107,8 @@ function App() {
         email: email,
         name: profile.full_name || 'User',
         role: profile.role as UserRole,
-        grade: profile.grade
+        grade: profile.grade,
+        metadata: profile.metadata
       });
     } catch (err) {
       console.error('Fatal profile error:', err);

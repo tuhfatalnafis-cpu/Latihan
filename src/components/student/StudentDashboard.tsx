@@ -26,6 +26,7 @@ import { Subject, Syllabus, Topic } from '../../lib/supabase';
 import { User } from '../../types';
 import { cn } from '../../lib/utils';
 import StudySession from './StudySession';
+import { Mascot } from './Mascot';
 import { StudentLayout } from '../../layouts/StudentLayout';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -211,7 +212,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Hero Card */}
       <Card variant="primary" className="relative group overflow-hidden border-none" padding="lg">
-        <div className="relative z-10 space-y-4 max-w-[80%]">
+        <div className="relative z-10 space-y-4 max-w-[60%] sm:max-w-[70%]">
           <h2 className="text-3xl font-black leading-tight sm:text-4xl text-white">
             {STRINGS.student.greeting} {user.name.split(' ')[0]}! 👋
           </h2>
@@ -229,8 +230,16 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           </div>
         </div>
         
+        {/* Mascot */}
+        <div className="absolute right-[-25px] bottom-[-30px] sm:right-[-10px] sm:bottom-[-20px] z-20 pointer-events-none">
+          <Mascot 
+            gender={user.metadata?.gender} 
+            className="size-48 sm:size-64 md:size-72" 
+          />
+        </div>
+
         <div className="absolute right-[-20px] bottom-[-20px] w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:scale-110 transition-transform duration-700" />
-        <div className="absolute top-1/2 right-4 -translate-y-1/2 select-none opacity-20 rotate-12 group-hover:rotate-0 transition-all duration-500">
+        <div className="absolute top-1/2 right-12 sm:right-24 -translate-y-1/2 select-none opacity-10 rotate-12 group-hover:rotate-0 transition-all duration-500 z-0">
            <GraduationCap className="w-32 h-32 text-white" />
         </div>
       </Card>
@@ -413,6 +422,14 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-20">
+          {view.type === 'browse_subjects' && subjects.length === 0 && (
+            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in">
+               <Mascot gender={user.metadata?.gender} className="size-44 mb-6" />
+               <p className="font-black text-2xl text-ink">Belum ada subjek tersedia.</p>
+               <p className="text-sm text-ink-muted mt-2 font-bold max-w-[280px]">Guru anda akan menambah kandungan tidak lama lagi! Mari semak semula nanti.</p>
+            </div>
+          )}
+
           {view.type === 'browse_subjects' && subjects.map((s, idx) => {
             const variants = ['mint', 'warm', 'lilac', 'primary'] as const;
             return (
@@ -575,8 +592,8 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col items-center gap-6 mt-10">
         <div className="relative group">
-          <div className="w-28 h-28 bg-primary/10 text-primary text-5xl font-black rounded-[2.5rem] flex items-center justify-center shadow-soft-lg border-4 border-white">
-            {user.name[0]}
+          <div className="w-28 h-28 bg-primary/10 rounded-[2.5rem] flex items-center justify-center shadow-soft-lg border-4 border-white overflow-hidden">
+            <Mascot gender={user.metadata?.gender} className="size-24" />
           </div>
           <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-accent-warm text-white rounded-2xl flex items-center justify-center shadow-soft ring-4 ring-bg-cream transition-transform group-hover:rotate-12">
             <Sparkles className="w-5 h-5 fill-current" />

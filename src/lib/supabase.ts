@@ -39,6 +39,9 @@ export interface Profile {
   full_name: string;
   grade?: string;
   created_at: string;
+  metadata?: {
+    gender?: 'male' | 'female' | null;
+  };
 }
 
 export interface Subject {

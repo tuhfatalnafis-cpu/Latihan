@@ -6,6 +6,9 @@ export interface User {
   role: UserRole;
   name: string;
   grade?: string;
+  metadata?: {
+    gender?: 'male' | 'female' | null;
+  };
 }
 
 export interface Question {
