@@ -159,6 +159,35 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             }}
             className="relative z-10"
           >
+            {/* Mascots */}
+            <motion.div
+              initial={{ x: -100, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="absolute -left-20 bottom-0 z-20"
+            >
+              <img 
+                src="/assets/mascots/boy.png" 
+                alt="Boy Mascot" 
+                className="w-32 h-32 sm:w-40 sm:h-40 object-contain drop-shadow-xl"
+                referrerPolicy="no-referrer"
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ x: 100, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.7 }}
+              className="absolute -right-20 bottom-0 z-20"
+            >
+              <img 
+                src="/assets/mascots/girl.png" 
+                alt="Girl Mascot" 
+                className="w-32 h-32 sm:w-40 sm:h-40 object-contain drop-shadow-xl"
+                referrerPolicy="no-referrer"
+              />
+            </motion.div>
+
             <div className="w-48 h-48 sm:w-64 sm:h-64 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center shadow-inner border border-white/30 relative">
               <Rocket className="w-24 h-24 sm:w-32 sm:h-32 text-white drop-shadow-[0_0_20px_white]" />
               
