@@ -209,7 +209,7 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
                   
                   <div 
                     className={cn(
-                      "border-2 border-dashed rounded-[2.5rem] p-8 transition-all flex flex-col items-center justify-center text-center",
+                      "border-2 border-dashed rounded-[2.5rem] p-8 transition-all flex flex-col items-center justify-center text-center relative",
                       files.length > 0 ? "bg-primary/5 border-primary/30" : "bg-slate-50 border-slate-200 hover:border-primary/30"
                     )}
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
