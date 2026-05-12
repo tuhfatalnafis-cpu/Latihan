@@ -209,7 +209,7 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
                   
                   <div 
                     className={cn(
-                      "border-2 border-dashed rounded-[2.5rem] p-8 transition-all flex flex-col items-center justify-center text-center relative",
+                      "border-2 border-dashed rounded-[2.5rem] p-8 transition-all flex flex-col items-center justify-center text-center cursor-pointer",
                       files.length > 0 ? "bg-primary/5 border-primary/30" : "bg-slate-50 border-slate-200 hover:border-primary/30"
                     )}
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
@@ -223,6 +223,7 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
                         handleFileChange(event);
                       }
                     }}
+                    onClick={() => document.getElementById('ai-file-upload')?.click()}
                   >
                     {files.length === 0 ? (
                       <>
@@ -248,15 +249,14 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
                         ))}
                       </div>
                     )}
-                    <label className="absolute inset-0 cursor-pointer opacity-0">
-                      <input 
-                        type="file" 
-                        className="hidden" 
-                        accept="application/pdf,image/*" 
-                        multiple 
-                        onChange={handleFileChange}
-                      />
-                    </label>
+                    <input 
+                      id="ai-file-upload"
+                      type="file" 
+                      className="hidden" 
+                      accept="application/pdf,image/*" 
+                      multiple 
+                      onChange={handleFileChange}
+                    />
                   </div>
                   
                   {files.length > 0 && (

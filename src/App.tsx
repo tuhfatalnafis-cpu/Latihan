@@ -107,6 +107,7 @@ function App() {
         email: email,
         name: profile.full_name || 'User',
         role: profile.role as UserRole,
+        gender: profile.gender || profile.metadata?.gender,
         grade: profile.grade,
         metadata: profile.metadata
       });

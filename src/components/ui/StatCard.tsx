@@ -13,9 +13,26 @@ interface StatCardProps {
     isPositive: boolean;
   };
   className?: string;
+  containerStyle?: React.CSSProperties;
+  iconContainerStyle?: React.CSSProperties;
+  iconStyle?: React.CSSProperties;
+  labelStyle?: React.CSSProperties;
+  valueStyle?: React.CSSProperties;
 }
 
-export const StatCard = ({ label, value, icon: Icon, variant = 'primary', trend, className }: StatCardProps) => {
+export const StatCard = ({ 
+  label, 
+  value, 
+  icon: Icon, 
+  variant = 'primary', 
+  trend, 
+  className,
+  containerStyle,
+  iconContainerStyle,
+  iconStyle,
+  labelStyle,
+  valueStyle
+}: StatCardProps) => {
   const iconColors = {
     primary: 'bg-primary/10 text-primary',
     mint: 'bg-accent-mint/20 text-accent-mint-dark', // Need to make sure mint-dark or similar is used or just ink
@@ -32,10 +49,17 @@ export const StatCard = ({ label, value, icon: Icon, variant = 'primary', trend,
   };
 
   return (
-    <Card className={cn('flex flex-col gap-1', className)} padding="sm">
+    <Card 
+      className={cn('flex flex-col gap-1', className)} 
+      padding="sm"
+      style={containerStyle}
+    >
       <div className="flex items-center justify-between transition-transform group-hover:scale-105">
-        <div className={cn('p-3 rounded-2xl', iconColors[variant])}>
-          {Icon && <Icon className="w-6 h-6" />}
+        <div 
+          className={cn('p-3 rounded-2xl', iconColors[variant])}
+          style={iconContainerStyle}
+        >
+          {Icon && <Icon className="w-6 h-6" style={iconStyle} />}
         </div>
         {trend && (
           <div className={cn(
@@ -47,8 +71,18 @@ export const StatCard = ({ label, value, icon: Icon, variant = 'primary', trend,
         )}
       </div>
       <div className="mt-4">
-        <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest">{label}</p>
-        <p className={cn("text-3xl font-black mt-1 tabular-nums", textColors[variant])}>{value}</p>
+        <p 
+          className="text-[10px] font-black text-ink-muted uppercase tracking-widest"
+          style={labelStyle}
+        >
+          {label}
+        </p>
+        <p 
+          className={cn("text-3xl font-black mt-1 tabular-nums", textColors[variant])}
+          style={valueStyle}
+        >
+          {value}
+        </p>
       </div>
     </Card>
   );

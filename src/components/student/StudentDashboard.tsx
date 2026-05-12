@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
+  Book,
+  Library,
   BookOpen, 
   ChevronRight, 
   Flame, 
@@ -233,7 +235,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         {/* Mascot */}
         <div className="absolute right-[-25px] bottom-[-30px] sm:right-[-10px] sm:bottom-[-20px] z-20 pointer-events-none">
           <Mascot 
-            gender={user.metadata?.gender} 
+            gender={user.gender} 
             className="size-48 sm:size-64 md:size-72" 
           />
         </div>
@@ -251,12 +253,22 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           value={dashboardStats.streak} 
           icon={Flame} 
           variant="warm" 
+          containerStyle={{ backgroundColor: '#ff5f5f' }}
+          iconContainerStyle={{ backgroundColor: '#ffffff' }}
+          iconStyle={{ color: '#ff5f5f' }}
+          labelStyle={{ color: '#ffffff' }}
+          valueStyle={{ color: '#ffffff' }}
         />
         <StatCard 
           label="Akurasi Keseluruhan" 
           value={`${dashboardStats.accuracy}%`} 
           icon={Target} 
           variant="lilac" 
+          containerStyle={{ backgroundColor: '#f5a700' }}
+          iconContainerStyle={{ backgroundColor: '#ffffff' }}
+          iconStyle={{ color: '#f5a700' }}
+          labelStyle={{ color: '#ffffff' }}
+          valueStyle={{ color: '#ffffff' }}
         />
         <StatCard 
           label={STRINGS.student.questions_done} 
@@ -294,10 +306,13 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               >
                 <div className="flex items-center gap-4">
                   <div className={cn(
-                    "w-14 h-14 rounded-2xl flex items-center justify-center text-ink text-2xl shadow-soft transition-transform group-hover:scale-110",
+                    "w-14 h-14 rounded-2xl flex items-center justify-center text-ink shadow-soft transition-transform group-hover:scale-110",
                     idx === 0 ? "bg-accent-mint/10" : idx === 1 ? "bg-accent-warm/10" : "bg-accent-lilac/10"
                   )}>
-                     {subject.name.includes('Arab') ? '🇸🇦' : '📚'}
+                     <Library className={cn(
+                       "w-7 h-7",
+                       idx === 0 ? "text-accent-mint" : idx === 1 ? "text-accent-warm" : "text-accent-lilac"
+                     )} />
                   </div>
                   <div>
                     <h4 className="font-extrabold text-lg text-ink leading-tight">{subject.name}</h4>
@@ -424,7 +439,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-20">
           {view.type === 'browse_subjects' && subjects.length === 0 && (
             <div className="col-span-full py-20 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in">
-               <Mascot gender={user.metadata?.gender} className="size-44 mb-6" />
+               <Mascot gender={user.gender} className="size-44 mb-6" />
                <p className="font-black text-2xl text-ink">Belum ada subjek tersedia.</p>
                <p className="text-sm text-ink-muted mt-2 font-bold max-w-[280px]">Guru anda akan menambah kandungan tidak lama lagi! Mari semak semula nanti.</p>
             </div>
@@ -440,10 +455,13 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                 onClick={() => setView({ type: 'browse_syllabi', subject: s })}
               >
                 <div className={cn(
-                  "w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft",
+                  "w-14 h-14 rounded-2xl flex items-center justify-center mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft",
                   idx % 4 === 0 ? "bg-accent-mint/10" : idx % 4 === 1 ? "bg-accent-warm/10" : idx % 4 === 2 ? "bg-accent-lilac/10" : "bg-primary/10"
                 )}>
-                   {s.name.includes('Arab') ? '🇸🇦' : '📚'}
+                   <Library className={cn(
+                     "w-7 h-7",
+                     idx % 4 === 0 ? "text-accent-mint" : idx % 4 === 1 ? "text-accent-warm" : idx % 4 === 2 ? "text-accent-lilac" : "text-primary"
+                   )} />
                 </div>
                 <h4 className="text-xl font-black text-ink leading-tight mt-4">{s.name}</h4>
                 <p className="text-xs font-bold text-ink-muted mt-1 uppercase tracking-widest">Terokai subjek</p>
@@ -521,14 +539,19 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <h3 className="text-2xl font-black text-ink tracking-tight">Kemajuan Saya</h3>
       
-      <Card variant="lilac" className="relative overflow-hidden border-none" padding="lg">
+      <Card 
+        variant="lilac" 
+        className="relative overflow-hidden border-none" 
+        padding="lg"
+        style={{ backgroundColor: '#ffc230' }}
+      >
         <div className="flex flex-col items-center text-center gap-6 relative z-10">
           <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-5xl shadow-soft-xl animate-bounce-slow">
             🏆
           </div>
           <div>
-            <h4 className="text-2xl font-black text-ink leading-tight">Bintang Cepat Belajar!</h4>
-            <p className="text-ink-muted font-bold mt-2">Setiap soalan yang betul membawa anda lebih jauh.</p>
+            <h4 className="text-2xl font-black text-white leading-tight">Bintang Cepat Belajar!</h4>
+            <p className="text-white font-bold mt-2" style={{ color: '#ffffff' }}>Setiap soalan yang betul membawa anda lebih jauh.</p>
           </div>
         </div>
         <div className="absolute top-[-10px] left-[-10px] opacity-20">
@@ -537,8 +560,28 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       </Card>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard label="Masa Belajar" value={formatTime(dashboardStats.totalTimeMs)} icon={Clock} variant="mint" />
-        <StatCard label="Akurasi" value={`${dashboardStats.accuracy}%`} icon={Target} variant="lilac" />
+        <StatCard 
+          label="Masa Belajar" 
+          value={formatTime(dashboardStats.totalTimeMs)} 
+          icon={Clock} 
+          variant="mint" 
+          containerStyle={{ backgroundColor: '#f5a700' }}
+          iconContainerStyle={{ backgroundColor: '#ffffff' }}
+          iconStyle={{ color: '#f5a700' }}
+          labelStyle={{ color: '#ffffff' }}
+          valueStyle={{ color: '#ffffff' }}
+        />
+        <StatCard 
+          label="Akurasi" 
+          value={`${dashboardStats.accuracy}%`} 
+          icon={Library} 
+          variant="lilac" 
+          containerStyle={{ backgroundColor: '#f95151' }}
+          iconContainerStyle={{ backgroundColor: '#ffffff' }}
+          iconStyle={{ color: '#f95151' }}
+          labelStyle={{ color: '#ffffff' }}
+          valueStyle={{ color: '#ffffff' }}
+        />
         <StatCard label="Selesai Masteri" value={dashboardStats.totalMastered} icon={Trophy} variant="warm" />
         <StatCard label="Soalan Dijawab" value={dashboardStats.totalAttempts} icon={CheckCircle} variant="primary" />
       </div>
@@ -593,7 +636,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       <div className="flex flex-col items-center gap-6 mt-10">
         <div className="relative group">
           <div className="w-28 h-28 bg-primary/10 rounded-[2.5rem] flex items-center justify-center shadow-soft-lg border-4 border-white overflow-hidden">
-            <Mascot gender={user.metadata?.gender} className="size-24" />
+            <Mascot gender={user.gender} className="size-24" />
           </div>
           <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-accent-warm text-white rounded-2xl flex items-center justify-center shadow-soft ring-4 ring-bg-cream transition-transform group-hover:rotate-12">
             <Sparkles className="w-5 h-5 fill-current" />

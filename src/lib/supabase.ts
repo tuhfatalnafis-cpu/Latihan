@@ -37,6 +37,7 @@ export interface Profile {
   id: string;
   role: UserRole;
   full_name: string;
+  gender?: 'male' | 'female' | null;
   grade?: string;
   created_at: string;
   metadata?: {

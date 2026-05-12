@@ -111,13 +111,14 @@ export default function StudentManager() {
 
       if (error) throw error;
       
-      // Explicitly update the profile to ensure metadata.gender is saved
+      // Explicitly update the profile to ensure gender is saved
       // This bypasses potential trigger limitations
       if (data.user) {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
-            metadata: { gender: gender }
+            gender: gender,
+            metadata: { gender: gender } // Still keep metadata for safety
           } as any)
           .eq('id', data.user.id);
         
@@ -148,7 +149,7 @@ export default function StudentManager() {
   const handleEditClick = (student: Profile) => {
     setEditingStudent(student);
     setFullName(student.full_name);
-    setGender(student.metadata?.gender || null);
+    setGender(student.gender || student.metadata?.gender || null);
     // password and email not editable here for simplicity
   };
 
@@ -161,6 +162,7 @@ export default function StudentManager() {
         .from('profiles')
         .update({
           full_name: fullName,
+          gender: gender,
           metadata: { 
             ...(editingStudent.metadata || {}),
             gender: gender 
@@ -283,7 +285,7 @@ export default function StudentManager() {
                        <div>
                          <h5 className="font-black text-ink text-xl leading-tight group-hover:text-primary transition-colors">{s.full_name}</h5>
                          <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mt-1">
-                            DEBUG: {s.metadata?.gender === 'female' ? 'Perempuan' : s.metadata?.gender === 'male' ? 'Lelaki' : 'Tidak nyatakan'}
+                            {s.gender === 'female' || s.metadata?.gender === 'female' ? 'Pelajar Perempuan' : s.gender === 'male' || s.metadata?.gender === 'male' ? 'Pelajar Lelaki' : 'Jantina Belum Ditetapkan'}
                          </p>
                          <div className="flex items-center gap-4 mt-2">
                            <p className="text-ink-muted text-xs font-bold flex items-center gap-1.5">

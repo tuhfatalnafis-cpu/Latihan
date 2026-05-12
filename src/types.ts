@@ -5,6 +5,7 @@ export interface User {
   email: string;
   role: UserRole;
   name: string;
+  gender?: 'male' | 'female' | null;
   grade?: string;
   metadata?: {
     gender?: 'male' | 'female' | null;
