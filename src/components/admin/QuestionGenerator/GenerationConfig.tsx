@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { BrainCircuit, ChevronRight, AlertCircle, Sparkles, Database, Upload, FileText, ImageIcon, X, Loader2 } from 'lucide-react';
+import { BrainCircuit, ChevronRight, AlertCircle, Sparkles, Database, Upload, FileText, ImageIcon, X, Loader2, Plus } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { GenConfig } from '../../../lib/questionGenerator';
 import { toast } from 'sonner';
@@ -14,7 +14,7 @@ interface Step1Props {
 export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Props) {
   const [name, setName] = useState('');
   const [count, setCount] = useState(libSize > 0 ? Math.min(20, libSize) : 20);
-  const [direction, setDirection] = useState<'ar_to_ms' | 'ms_to_ar' | 'both'>('both');
+  const [direction, setDirection] = useState<'ar_to_ms' | 'ms_to_ar' | 'both' | 'general'>('both');
   const [strategy, setStrategy] = useState<'random' | 'ai' | 'pure_ai'>(libSize > 0 ? 'random' : 'pure_ai');
   const [prompt, setPrompt] = useState('');
   const [files, setFiles] = useState<{ data: string; mimeType: string, name: string }[]>([]);
@@ -27,11 +27,14 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
     const selectedFiles = e.target.files;
     if (!selectedFiles) return;
 
+    console.log('[QuestionGenerator] Files selected:', selectedFiles.length);
     setIsUploading(true);
     const newFiles: { data: string; mimeType: string, name: string }[] = [];
 
     for (let i = 0; i < selectedFiles.length; i++) {
        const file = selectedFiles[i];
+       console.log(`[QuestionGenerator] Processing file: ${file.name} (${file.type}, ${file.size} bytes)`);
+       
        if (file.size > 10 * 1024 * 1024) {
          toast.error(`Fail ${file.name} terlalu besar (max 10MB)`);
          continue;
@@ -41,12 +44,18 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
        const promise = new Promise<void>((resolve) => {
          reader.onload = (e) => {
            if (e.target?.result) {
+             console.log(`[QuestionGenerator] File read success: ${file.name}`);
              newFiles.push({
                data: e.target.result as string,
                mimeType: file.type,
                name: file.name
              });
            }
+           resolve();
+         };
+         reader.onerror = (err) => {
+           console.error(`[QuestionGenerator] File read error: ${file.name}`, err);
+           toast.error(`Gagal membaca fail ${file.name}`);
            resolve();
          };
        });
@@ -56,7 +65,10 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
 
     setFiles(prev => [...prev, ...newFiles]);
     setIsUploading(false);
-    if (strategy !== 'pure_ai') setStrategy('pure_ai');
+    if (strategy !== 'pure_ai') {
+      setStrategy('pure_ai');
+      console.log('[QuestionGenerator] Strategy auto-switched to pure_ai');
+    }
   };
 
   const removeFile = (index: number) => {
@@ -114,13 +126,14 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
 
         {/* Direction */}
         <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Arah Soalan</label>
-          <div className="grid grid-cols-3 gap-2">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Arah atau Jenis Soalan</label>
+          <div className="grid grid-cols-2 gap-2">
             {[
-              { id: 'ar_to_ms', label: 'Arab → Melayu' },
-              { id: 'ms_to_ar', label: 'Melayu → Arab' },
-              { id: 'both', label: 'Kedua-dua' }
-            ].map(dir => (
+              { id: 'ar_to_ms', label: 'Arab → Melayu', hidden: strategy === 'random' && libSize < 1 },
+              { id: 'ms_to_ar', label: 'Melayu → Arab', hidden: strategy === 'random' && libSize < 1 },
+              { id: 'both', label: 'Kombinasi Arab-Melayu', hidden: strategy === 'random' },
+              { id: 'general', label: 'Umum / Pemahaman (AI)', hidden: strategy !== 'pure_ai' }
+            ].filter(d => !d.hidden).map(dir => (
               <button
                 key={dir.id}
                 onClick={() => setDirection(dir.id as any)}
@@ -191,22 +204,51 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
                 animate={{ opacity: 1, height: 'auto' }}
                 className="pt-2 space-y-4"
               >
-                <div>
+                <div className="space-y-4">
                   <label className="block text-[10px] font-black text-primary uppercase tracking-widest mb-2 px-2">Muat Naik Fail (PDF/Imej)</label>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {files.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-primary/10 text-primary px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider group relative">
-                        {file.mimeType.includes('pdf') ? <FileText className="w-3.3 h-3.3" /> : <ImageIcon className="w-3.3 h-3.3" />}
-                        <span className="max-w-[100px] truncate">{file.name}</span>
-                        <button 
-                          onClick={() => removeFile(idx)}
-                          className="hover:text-rose-500 transition-colors"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                  
+                  <div 
+                    className={cn(
+                      "border-2 border-dashed rounded-[2.5rem] p-8 transition-all flex flex-col items-center justify-center text-center",
+                      files.length > 0 ? "bg-primary/5 border-primary/30" : "bg-slate-50 border-slate-200 hover:border-primary/30"
+                    )}
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5'); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-primary', 'bg-primary/5'); }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('border-primary', 'bg-primary/5');
+                      const droppedFiles = e.dataTransfer.files;
+                      if (droppedFiles && droppedFiles.length > 0) {
+                        const event = { target: { files: droppedFiles } } as any;
+                        handleFileChange(event);
+                      }
+                    }}
+                  >
+                    {files.length === 0 ? (
+                      <>
+                        <div className="w-16 h-16 bg-white rounded-[1.5rem] shadow-soft flex items-center justify-center mb-4 text-primary group-hover:scale-110 transition-transform">
+                          <Upload className="w-8 h-8" />
+                        </div>
+                        <p className="text-sm font-black text-slate-600 mb-1">Seret & Lepas atau Klik</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sokong PDF, PNG, JPG, WebP (Maks 10MB)</p>
+                      </>
+                    ) : (
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {files.map((file, idx) => (
+                          <div key={idx} className="flex items-center gap-2 bg-white text-primary px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-soft group relative border border-primary/10">
+                            {file.mimeType.includes('pdf') ? <FileText className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}
+                            <span className="max-w-[120px] truncate">{file.name}</span>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
+                              className="w-5 h-5 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all ml-1"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    <label className="cursor-pointer">
+                    )}
+                    <label className="absolute inset-0 cursor-pointer opacity-0">
                       <input 
                         type="file" 
                         className="hidden" 
@@ -214,14 +256,29 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
                         multiple 
                         onChange={handleFileChange}
                       />
-                      <div className="flex items-center gap-2 border-2 border-dashed border-primary/30 text-primary/60 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-primary/5 hover:border-primary/50 transition-all">
-                        {isUploading ? <Loader2 className="w-3.3 h-3.3 animate-spin" /> : <Upload className="w-3.3 h-3.3" />}
-                        <span>Tambah Fail</span>
-                      </div>
                     </label>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-bold px-2 italic mb-3">
-                    AI akan menggunakan kandungan fail ini untuk menjana soalan.
+                  
+                  {files.length > 0 && (
+                    <div className="flex justify-center">
+                      <label className="cursor-pointer">
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="application/pdf,image/*" 
+                          multiple 
+                          onChange={handleFileChange}
+                        />
+                        <div className="flex items-center gap-2 text-primary/60 hover:text-primary transition-colors py-1">
+                          <Plus className="w-4 h-4" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Tambah Fail Lain</span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-slate-400 font-bold px-2 italic text-center">
+                    AI akan menggunakan kandungan fail ini untuk menjana soalan secara automatik.
                   </p>
                 </div>
 
@@ -230,7 +287,7 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
                   <textarea 
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={files.length > 0 ? "Contoh: Fokus kepada kosa kata perniagaan dalam fail ini..." : "Contoh: Peralatan dapur dalam Arab, Sifat-sifat terpuji, Warna-warna..."}
+                    placeholder={files.length > 0 ? "Contoh: Fokus kepada pemahaman teks dalam fail ini..." : "Contoh: Pemahaman petikan, Tatabahasa, Sejarah Islam, atau kosa kata khusus..."}
                     className="w-full px-5 py-4 bg-primary/5 border-2 border-primary/20 rounded-2xl font-bold text-slate-800 outline-none focus:border-primary transition-all min-h-[100px]"
                   />
                 </div>

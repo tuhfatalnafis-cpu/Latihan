@@ -15,14 +15,14 @@ export interface VocabRow {
 
 export interface GenConfig {
   count: number;
-  direction: 'ar_to_ms' | 'ms_to_ar' | 'both';
+  direction: 'ar_to_ms' | 'ms_to_ar' | 'both' | 'general';
 }
 
 export interface GeneratedMCQ {
   prompt: string;
   answer: string;
   distractors: [string, string, string];
-  direction: 'ar_to_ms' | 'ms_to_ar';
+  direction: 'ar_to_ms' | 'ms_to_ar' | 'general';
   source_vocab_id?: string;
   metadata: { 
     image_keyword?: string;

@@ -19,57 +19,74 @@ export async function generateQuestionsWithFiles(
   if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
   const systemInstruction = `
-    You are an expert Arabic teacher. Generate a JSON array of Arabic-Malay MCQs.
-    - Direction 'ar_to_ms': prompt is Arabic, answer is Malay.
-    - Direction 'ms_to_ar': prompt is Malay, answer is Arabic.
-    - Each question must have exactly 3 distractors.
-    - Arabic text must include harakat.
-    - Keep all text concise.
-    - Return ONLY a clean JSON array. No text before or after.
+    You are an educational assessment expert specializing in language and academic subjects. 
+    Your goal is to generate a JSON array of high-quality Multiple Choice Questions (MCQs).
+    
+    GUIDELINES:
+    - Questions can focus on vocabulary, grammar, or reading comprehension.
+    - If the user provides a topic like "Comprehension", generate questions that test understanding of context, not just word-to-word translation.
+    - Supported 'direction':
+      - 'ar_to_ms': Arabic prompt, Malay answer.
+      - 'ms_to_ar': Malay prompt, Arabic answer.
+      - 'general': For comprehension or other subject-based questions where translation direction is not applicable.
+    - Each question must have exactly 3 distractors (wrong but plausible answers).
+    - Text must be accurate and include appropriate formatting (e.g., harakat for Arabic).
+    - Adapt the question style to the user's specific prompt or provided files.
+    - Return ONLY a clean JSON array. No conversational text.
   `;
 
   try {
     const fileParts = files.map(f => ({
       inlineData: {
-        data: f.data.split(',')[1] || f.data, // Strip data:mime/type;base64, if present
+        data: f.data.includes('base64,') ? f.data.split('base64,')[1] : f.data,
         mimeType: f.mimeType
       }
     }));
 
-    const textPart = {
-      text: `Generate ${Math.min(count, 25)} Arabic-Malay vocabulary MCQs based on the provided context/files. 
-             Focus or Topic Instruction: "${prompt}". 
-             Keep prompts and answers short.`
-    };
+    const promptText = `Generate ${Math.min(count, 25)} MCQs based on the following instructions:
+"${prompt || 'General knowledge and Arabic-Malay vocabulary'}".
+
+CONTEXTUAL RULES:
+- If files are provided, the questions MUST strictly relate to the content of those files.
+- Prioritize "Comprehension" and "Application" levels of learning if suggested by the prompt.
+- Ensure the questions follow the specific subject requirements described in the prompt.
+- Each MCQ must have 1 correct 'answer' and 3 'distractors'.`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: { 
-        parts: [...fileParts, textPart]
-      },
+      contents: [{
+        parts: [...fileParts, { text: promptText }]
+      }],
       config: {
         systemInstruction,
         temperature: 0.7,
-        maxOutputTokens: 8192,
-        thinkingConfig: {
-          thinkingLevel: ThinkingLevel.LOW
-        },
         responseMimeType: "application/json",
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.MINIMAL
+        },
         responseSchema: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
             properties: {
-              prompt: { type: Type.STRING },
-              answer: { type: Type.STRING },
+              prompt: { 
+                type: Type.STRING,
+                description: "The question or prompt text."
+              },
+              answer: { 
+                type: Type.STRING,
+                description: "The correct answer."
+              },
               distractors: { 
                 type: Type.ARRAY, 
                 items: { type: Type.STRING },
-                description: "Array of exactly 3 strings"
+                minItems: 3,
+                maxItems: 3,
+                description: "Exactly 3 plausible but incorrect distractors."
               },
               direction: { 
                 type: Type.STRING,
-                description: "ar_to_ms or ms_to_ar"
+                description: "'ar_to_ms', 'ms_to_ar', or 'general'"
               },
               transliteration: { type: Type.STRING },
               image_keyword: { type: Type.STRING }
@@ -86,14 +103,21 @@ export async function generateQuestionsWithFiles(
     }
 
     try {
-      const data = JSON.parse(text.trim());
+      const trimmedText = text.trim();
+      const jsonStart = trimmedText.indexOf('[');
+      const jsonEnd = trimmedText.lastIndexOf(']') + 1;
+      const jsonString = (jsonStart !== -1 && jsonEnd !== -1) 
+        ? trimmedText.substring(jsonStart, jsonEnd) 
+        : trimmedText;
+
+      const data = JSON.parse(jsonString);
       console.log("AI Generation Successful. Count:", data.length);
       
       return data.map((q: any) => ({
         prompt: q.prompt,
         answer: q.answer,
         distractors: (q.distractors || []).slice(0, 3) as [string, string, string],
-        direction: q.direction || 'ar_to_ms',
+        direction: q.direction || 'general',
         source_vocab_id: undefined,
         metadata: {
           transliteration: q.transliteration || "",
@@ -102,9 +126,7 @@ export async function generateQuestionsWithFiles(
       }));
     } catch (parseError) {
       console.error("Failed to parse AI response JSON.");
-      console.error("Text length:", text.length);
-      console.error("Text start:", text.substring(0, 200));
-      console.error("Text end:", text.substring(text.length - 200));
+      console.error("Raw Text:", text);
       throw new Error("Gagal memproses jawapan AI. Sila cuba lagi dengan topik yang lebih ringkas.");
     }
   } catch (error) {

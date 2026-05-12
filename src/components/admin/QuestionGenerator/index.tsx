@@ -25,6 +25,12 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
   const [enhanceProgress, setEnhanceProgress] = useState(0);
 
   const handleConfigComplete = async (newConfig: { name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string; files?: { data: string; mimeType: string }[] } & GenConfig) => {
+    console.log('[QuestionGenerator] Start generation with config:', { 
+      name: newConfig.name, 
+      strategy: newConfig.strategy, 
+      fileCount: newConfig.files?.length,
+      prompt: newConfig.prompt 
+    });
     setConfig(newConfig);
     setStep(2);
     
@@ -32,9 +38,12 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
       setIsEnhancing(true);
       setEnhanceProgress(10);
       try {
+        console.log('[QuestionGenerator] Calling AI service...');
         const aiQuestions = await generateQuestionsWithFiles(newConfig.prompt || '', newConfig.files || [], newConfig.count);
+        console.log('[QuestionGenerator] AI service returned:', aiQuestions.length, 'questions');
         setQuestions(aiQuestions);
       } catch (err: any) {
+        console.error('[QuestionGenerator] AI Generation Error:', err);
         toast.error('Gagal menjana soalan AI: ' + err.message);
         setStep(1);
       } finally {
@@ -74,7 +83,7 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
         question_type: 'multiple_choice' as const,
         prompt: q.prompt,
         answer: q.answer,
-        arabic: q.direction === 'ar_to_ms' ? q.prompt : q.answer,
+        arabic: q.direction === 'ar_to_ms' ? q.prompt : (q.direction === 'ms_to_ar' ? q.answer : ''),
         distractors: q.distractors,
         metadata: {
           set_name: config.name,

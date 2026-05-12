@@ -83,8 +83,9 @@ export interface Question {
   metadata: {
     image_url?: string;
     image_keyword?: string;
-    direction?: 'ar_to_ms' | 'ms_to_ar';
+    direction?: 'ar_to_ms' | 'ms_to_ar' | 'general';
     pairs?: { left: string; right: string }[];
+    [key: string]: any;
   };
   created_by: string;
   created_at: string;
