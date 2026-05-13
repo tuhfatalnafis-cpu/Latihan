@@ -102,6 +102,30 @@ export const db = {
         totalTimeMs,
         totalMastered: totalMastered || 0
       };
+    },
+    async savePartialSession(id: string, topicId: string, sessionData: any) {
+      const profile = await this.get(id);
+      const metadata = profile.metadata || {};
+      const activeSessions = metadata.active_sessions || {};
+      
+      metadata.active_sessions = {
+        ...activeSessions,
+        [topicId]: {
+          ...sessionData,
+          updated_at: new Date().toISOString()
+        }
+      };
+
+      return this.update(id, { metadata });
+    },
+    async clearPartialSession(id: string, topicId: string) {
+      const profile = await this.get(id);
+      const metadata = profile.metadata || {};
+      if (metadata.active_sessions && metadata.active_sessions[topicId]) {
+        delete metadata.active_sessions[topicId];
+        return this.update(id, { metadata });
+      }
+      return profile;
     }
   },
 
@@ -429,6 +453,18 @@ export const db = {
         .order('created_at');
       if (error) throw error;
       return data as Question[];
+    },
+    async listByIds(ids: string[]) {
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase
+        .from('questions')
+        .select('*')
+        .in('id', ids);
+      if (error) throw error;
+      
+      // Return in the specific order requested in ids array
+      const idMap = new Map(data.map(q => [q.id, q]));
+      return ids.map(id => idMap.get(id)).filter(q => !!q) as Question[];
     },
     async create(question: Partial<Question>) {
       const { data, error } = await supabase

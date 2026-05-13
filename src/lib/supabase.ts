@@ -42,6 +42,8 @@ export interface Profile {
   created_at: string;
   metadata?: {
     gender?: 'male' | 'female' | null;
+    active_sessions?: Record<string, any>;
+    [key: string]: any;
   };
 }
 

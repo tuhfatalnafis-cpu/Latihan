@@ -52,19 +52,79 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [isMastered, setIsMastered] = useState(false); // New mastery spark
+  const [savedSession, setSavedSession] = useState<any>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
 
   useEffect(() => {
-    fetchQuestions();
+    checkSavedSession();
     fetchTopicStats(true);
   }, [topic.id, mode]);
 
+  const checkSavedSession = async () => {
+    setLoading(true);
+    try {
+      const profile = await db.profiles.get(user.id);
+      const activeSessions = profile.metadata?.active_sessions || {};
+      const saved = activeSessions[topic.id];
+      
+      if (saved && !showSummary) {
+        setSavedSession(saved);
+        setShowResumePrompt(true);
+      } else {
+        fetchQuestions();
+      }
+    } catch (err) {
+      console.error('Check saved session error:', err);
+      fetchQuestions();
+    }
+  };
+
+  const resumeSession = async () => {
+    if (!savedSession) return;
+    setLoading(true);
+    setShowResumePrompt(false);
+    try {
+      const qData = await db.questions.listByIds(savedSession.question_ids);
+      setQuestions(qData);
+      setCurrentIndex(savedSession.current_index);
+      setResults(savedSession.results || []);
+      setSecondsElapsed(savedSession.seconds_elapsed || 0);
+      setStartTime(Date.now());
+      setLoading(false);
+    } catch (err) {
+      console.error('Resume error:', err);
+      toast.error('Gagal menyambung sesi. Memulakan sesi baru.');
+      fetchQuestions();
+    }
+  };
+
+  const restartSession = () => {
+    setShowResumePrompt(false);
+    db.profiles.clearPartialSession(user.id, topic.id).catch(console.error);
+    fetchQuestions();
+  };
+
   useEffect(() => {
-    if (showSummary || loading) return;
+    if (showSummary || loading || showResumePrompt) return;
     const timer = setInterval(() => {
       setSecondsElapsed(prev => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [showSummary, loading]);
+  }, [showSummary, loading, showResumePrompt]);
+
+  const saveProgress = async (newIndex: number, newResults: any[], elapsed: number) => {
+    if (showSummary) return;
+    try {
+      await db.profiles.savePartialSession(user.id, topic.id, {
+        current_index: newIndex,
+        results: newResults,
+        seconds_elapsed: elapsed,
+        question_ids: questions.map(q => q.id)
+      });
+    } catch (err) {
+      console.error('Save progress error:', err);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -92,7 +152,8 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
         if (setName) {
           filtered = data.filter(q => (q.metadata as any)?.set_name === setName);
         }
-        setQuestions(filtered.sort(() => Math.random() - 0.5));
+        const shuffled = filtered.sort(() => Math.random() - 0.5);
+        setQuestions(shuffled);
       } else {
         const due = await db.progress.getDue(user.id);
         const filtered = due.filter((p: any) => p.questions.topic_id === topic.id).map((p: any) => p.questions);
@@ -103,6 +164,8 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
       setShowSummary(false);
       setStartTime(Date.now());
       setSecondsElapsed(0);
+      // Clear any partial session since we are explicitly starting fresh via fetchQuestions
+      db.profiles.clearPartialSession(user.id, topic.id).catch(console.error);
     } catch (err) {
       console.error('Fetch error:', err);
     } finally {
@@ -123,9 +186,12 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     setIsFlipped(false);
     
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
       setStartTime(Date.now());
+      saveProgress(nextIndex, results, secondsElapsed);
     } else {
+      db.profiles.clearPartialSession(user.id, topic.id).catch(console.error);
       fetchTopicStats();
       setShowSummary(true);
     }
@@ -141,6 +207,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     // Optimized results tracking
     const newResults = [...results, { questionId: currentQuestion.id, isCorrect }];
     setResults(newResults);
+    saveProgress(currentIndex, newResults, secondsElapsed);
 
     try {
       // Parallelize recording attempt and fetching/updating progress
@@ -480,7 +547,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
              {!showSummary && <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest">{currentIndex + 1} / {questions.length} Perkataan</p>}
            </div>
          </div>
-
+ 
           <div className="flex-1 max-w-[240px] mx-6">
             <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
               <motion.div 
@@ -490,15 +557,25 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
               />
             </div>
           </div>
-
-         <div className="flex items-center gap-3">
-            <div className="px-4 py-2.5 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-2 shrink-0">
-               <Clock className="w-4 h-4 text-primary" />
-               <span className="text-primary font-black tabular-nums">{formatTime(secondsElapsed)}</span>
-            </div>
-         </div>
+ 
+          <div className="flex items-center gap-3">
+             {!showSummary && !loading && !showResumePrompt && (
+               <button 
+                 onClick={restartSession}
+                 className="p-3 bg-white border border-slate-100 text-ink-muted hover:text-primary rounded-2xl transition-all flex items-center gap-2 text-xs font-black uppercase tracking-wider"
+                 title="Restart session"
+               >
+                 <RotateCcw className="w-4 h-4" />
+                 <span className="hidden sm:inline">Retry</span>
+               </button>
+             )}
+             <div className="px-4 py-2.5 bg-primary/5 border border-primary/10 rounded-2xl flex items-center gap-2 shrink-0">
+                <Clock className="w-4 h-4 text-primary" />
+                <span className="text-primary font-black tabular-nums">{formatTime(secondsElapsed)}</span>
+             </div>
+          </div>
       </header>
-
+ 
       {/* Main Area */}
       <main className="flex-1 overflow-y-auto p-6 md:p-12 relative flex items-start justify-center">
         <div className="w-full max-w-5xl flex flex-col items-center justify-start pt-4 sm:pt-10">
@@ -508,6 +585,26 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
                 <Mascot gender={user.gender} className="size-20" />
               </div>
               <p className="font-black text-lg">Membuka lembaran baru...</p>
+            </div>
+          ) : showResumePrompt ? (
+            <div className="flex flex-col items-center justify-center max-w-md w-full animate-in zoom-in duration-300">
+              <Card className="w-full text-center p-10 bg-white shadow-soft-lg rounded-[3rem]" padding="lg">
+                <div className="w-20 h-20 bg-primary/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
+                  <BrainCircuit className="w-10 h-10 text-primary" />
+                </div>
+                <h2 className="text-3xl font-black text-ink mb-2">Sesi Belum Tamat!</h2>
+                <p className="text-ink-muted font-bold mb-10">
+                  Anda mempunyai sesi yang belum tamat untuk topik ini. Ingin sambung dari mana anda berhenti?
+                </p>
+                <div className="flex flex-col gap-4">
+                  <Button size="lg" className="w-full shadow-soft" onClick={resumeSession}>
+                    <ArrowRight className="w-5 h-5 mr-3" /> Sambung Sesi
+                  </Button>
+                  <Button size="lg" variant="ghost" className="w-full" onClick={restartSession}>
+                    <RotateCcw className="w-5 h-5 mr-3" /> Mula Baru
+                  </Button>
+                </div>
+              </Card>
             </div>
           ) : showSummary ? (
             renderSummary()
