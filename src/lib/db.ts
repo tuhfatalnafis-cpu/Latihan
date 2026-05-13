@@ -126,6 +126,25 @@ export const db = {
         return this.update(id, { metadata });
       }
       return profile;
+    },
+    async recordQuizResult(id: string, result: { 
+      topic_id: string, 
+      set_name: string, 
+      score: number, 
+      total: number, 
+      accuracy: number,
+      timestamp: string 
+    }) {
+      const profile = await this.get(id);
+      const metadata = profile.metadata || {};
+      const history = metadata.quiz_history || [];
+      
+      metadata.quiz_history = [
+        ...history,
+        { ...result, id: crypto.randomUUID() }
+      ].slice(-100); // Keep last 100 results
+
+      return this.update(id, { metadata });
     }
   },
 

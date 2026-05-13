@@ -193,6 +193,19 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     } else {
       db.profiles.clearPartialSession(user.id, topic.id).catch(console.error);
       fetchTopicStats();
+      
+      // Record quiz result
+      const score = results.filter(r => r.isCorrect).length;
+      const accuracy = Math.round((score / (results.length || 1)) * 100);
+      db.profiles.recordQuizResult(user.id, {
+        topic_id: topic.id,
+        set_name: setName || 'Umum',
+        score,
+        total: results.length,
+        accuracy,
+        timestamp: new Date().toISOString()
+      }).catch(console.error);
+      
       setShowSummary(true);
     }
   };

@@ -35,6 +35,18 @@ import { Button } from '../ui/Button';
 import { StatCard } from '../ui/StatCard';
 import { STRINGS } from '../../lib/strings';
 
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  AreaChart,
+  Area
+} from 'recharts';
+
 interface StudentDashboardProps {
   user: User;
   onLogout: () => void;
@@ -56,7 +68,8 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [topicStats, setTopicStats] = useState<Record<string, { total: number, mastered: number, attempted: number, accuracy: number, masteryPercentage: number }>>({});
+  const [topicStats, setTopicStats] = useState<Record<string, { total: number, attempted: number, accuracy: number }>>({});
+  const [quizHistory, setQuizHistory] = useState<any[]>([]);
   const [dashboardStats, setDashboardStats] = useState<{ 
     streak: number, 
     totalQuestions: number,
@@ -64,8 +77,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     totalAttempts: number,
     accuracy: number,
     totalTimeMs: number,
-    totalMastered: number
-  }>({ streak: 0, totalQuestions: 0, totalCorrect: 0, totalAttempts: 0, accuracy: 0, totalTimeMs: 0, totalMastered: 0 });
+  }>({ streak: 0, totalQuestions: 0, totalCorrect: 0, totalAttempts: 0, accuracy: 0, totalTimeMs: 0 });
   const [loading, setLoading] = useState(true);
 
   const groupedSubjects = React.useMemo(() => {
@@ -83,9 +95,19 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     const init = async () => {
       await fetchData();
       fetchDashboardStats();
+      fetchQuizHistory();
     };
     init();
   }, [view, activeTab]);
+
+  const fetchQuizHistory = async () => {
+    try {
+      const profile = await db.profiles.get(user.id);
+      setQuizHistory(profile.metadata?.quiz_history || []);
+    } catch (err) {
+      console.error('Error fetching quiz history:', err);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'progress' && subjects.length > 0) {
@@ -233,7 +255,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
             {STRINGS.student.greeting} {user.name.split(' ')[0]}! 👋
           </h2>
           <p className="text-white/80 font-bold leading-relaxed text-sm">
-            Mana satu kita nak kuasai hari ini? Mari sambung belajar!
+            Mana satu kita nak cuba hari ini? Mari uji pengetahuan anda!
           </p>
           <div className="pt-2">
             <Button 
@@ -241,7 +263,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               onClick={() => setActiveTab('subjects')}
               className="text-primary font-black rounded-2xl h-12 shadow-soft hover:shadow-soft-lg"
             >
-              Mula Belajar <ArrowRight className="ml-2 w-5 h-5" />
+              Mula Latihan <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
           </div>
         </div>
@@ -291,8 +313,8 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           variant="mint" 
         />
         <StatCard 
-          label="Selesai Masteri" 
-          value={dashboardStats.totalMastered} 
+          label="Latihan Selesai" 
+          value={quizHistory.length} 
           icon={Trophy} 
           variant="primary" 
         />
@@ -545,8 +567,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           ))}
 
           {view.type === 'browse_topics' && topics.map(t => {
-            const stats = topicStats[t.id] || { mastered: 0, total: 0, attempted: 0, accuracy: 0, masteryPercentage: 0 };
-            const percentage = stats.masteryPercentage;
+            const stats = topicStats[t.id] || { total: 0, attempted: 0, accuracy: 0 };
             const attemptedPercentage = stats.total > 0 ? Math.round((stats.attempted / stats.total) * 100) : 0;
             
             return (
@@ -562,30 +583,21 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                   </div>
                   <div className="flex gap-4">
                     <div className="text-right">
-                      <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest">Akurasi</p>
+                      <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest">Purata Akurasi</p>
                       <p className="text-xl font-black text-primary">{stats.accuracy}%</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest">Masteri</p>
-                      <p className="text-xl font-black text-emerald-600">{percentage}%</p>
                     </div>
                   </div>
                 </div>
                 <h4 className="text-2xl font-black text-ink mb-6 leading-tight tracking-tight">{t.name}</h4>
                 <div className="w-full h-3 bg-slate-50 rounded-full overflow-hidden border border-slate-100 relative">
-                  {/* Attempted */}
-                  <div 
-                    className="absolute inset-x-0 h-full bg-accent-mint/20"
-                    style={{ width: `${attemptedPercentage}%` }}
-                  />
-                  {/* Mastered */}
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: `${percentage}%` }}
+                    animate={{ width: `${attemptedPercentage}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className="h-full bg-accent-mint shadow-soft-sm relative z-10"
                   />
                 </div>
+                <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest mt-2">{attemptedPercentage}% Dicuba</p>
               </Card>
             );
           })}
@@ -596,118 +608,144 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     </div>
   );
 
-  const renderProgress = () => (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      <h3 className="text-2xl font-black text-ink tracking-tight">Kemajuan Saya</h3>
-      
-      <Card 
-        variant="lilac" 
-        className="relative overflow-hidden border-none" 
-        padding="lg"
-        style={{ backgroundColor: '#ffc230' }}
-      >
-        <div className="flex flex-col items-center text-center gap-6 relative z-10">
-          <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-5xl shadow-soft-xl animate-bounce-slow">
-            🏆
-          </div>
-          <div>
-            <h4 className="text-2xl font-black text-white leading-tight">Bintang Cepat Belajar!</h4>
-            <p className="text-white font-bold mt-2" style={{ color: '#ffffff' }}>Setiap soalan yang betul membawa anda lebih jauh.</p>
-          </div>
-        </div>
-        <div className="absolute top-[-10px] left-[-10px] opacity-20">
-          <Sparkles className="w-16 h-16 text-white" />
-        </div>
-      </Card>
+  const renderProgress = () => {
+    // Group quiz history by topic_id and then by set_name
+    const historyBySet = quizHistory.reduce((acc: Record<string, any[]>, item: any) => {
+      const key = `${item.topic_id}:${item.set_name}`;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
+      return acc;
+    }, {});
 
-      <div className="grid grid-cols-2 gap-4">
-        <StatCard 
-          label="Masa Belajar" 
-          value={formatTime(dashboardStats.totalTimeMs)} 
-          icon={Clock} 
-          variant="mint" 
-          containerStyle={{ backgroundColor: '#f5a700' }}
-          iconContainerStyle={{ backgroundColor: '#ffffff' }}
-          iconStyle={{ color: '#f5a700' }}
-          labelStyle={{ color: '#ffffff' }}
-          valueStyle={{ color: '#ffffff' }}
-        />
-        <StatCard 
-          label="Akurasi" 
-          value={`${dashboardStats.accuracy}%`} 
-          icon={Library} 
-          variant="lilac" 
-          containerStyle={{ backgroundColor: '#f95151' }}
-          iconContainerStyle={{ backgroundColor: '#ffffff' }}
-          iconStyle={{ color: '#f95151' }}
-          labelStyle={{ color: '#ffffff' }}
-          valueStyle={{ color: '#ffffff' }}
-        />
-        <StatCard label="Selesai Masteri" value={dashboardStats.totalMastered} icon={Trophy} variant="warm" />
-        <StatCard label="Soalan Dijawab" value={dashboardStats.totalAttempts} icon={CheckCircle} variant="primary" />
-      </div>
+    // Sort history by timestamp for charts
+    Object.keys(historyBySet).forEach((key: string) => {
+      historyBySet[key].sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    });
 
-      <Card className="border-2 border-slate-50">
-        <h4 className="font-black text-ink mb-8 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
-            <BarChart2 className="w-5 h-5" />
-          </div>
-          Penguasaan Subjek
-        </h4>
-        <div className="space-y-12">
-          {Object.entries(groupedSubjects)
-          .sort(([a], [b]) => {
-            if (a === 'Lain-lain') return 1;
-            if (b === 'Lain-lain') return -1;
-            return a.localeCompare(b, undefined, { numeric: true });
-          })
-          .map(([grade, gradeSubjects]) => (
-            <div key={grade} className="space-y-6">
-              <h5 className="text-sm font-black text-ink-muted uppercase tracking-[0.2em] flex items-center gap-3">
-                <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg">{grade}</span>
-                <div className="h-px flex-1 bg-slate-100" />
-              </h5>
-              
-              <div className="space-y-8">
-                {gradeSubjects.map(s => {
-                  const stats = (subjectMastery[s.id] as any) || { percentage: 0, accuracy: 0, total: 0, mastered: 0, attempted: 0 };
-                  return (
-                    <div key={s.id} className="space-y-3">
-                      <div className="flex justify-between text-sm items-center">
-                        <div>
-                          <span className="font-black text-ink text-lg block">{s.name}</span>
-                          <span className="text-[10px] font-black text-ink-muted uppercase tracking-wider">
-                            {stats.mastered} dikuasai • {stats.attempted} dicuba • {stats.accuracy}% akurasi
-                          </span>
-                        </div>
-                        <div className="text-right">
-                           <span className="text-[10px] font-black text-primary uppercase block mb-1">Masteri</span>
-                           <span className="font-black text-primary bg-primary/5 px-3 py-1 rounded-full">{stats.percentage}%</span>
-                        </div>
+    return (
+      <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+        <h3 className="text-2xl font-black text-ink tracking-tight">Prestasi Latihan</h3>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <StatCard 
+            label="Masa Belajar" 
+            value={formatTime(dashboardStats.totalTimeMs)} 
+            icon={Clock} 
+            variant="mint" 
+            containerStyle={{ backgroundColor: '#f5a700' }}
+            iconContainerStyle={{ backgroundColor: '#ffffff' }}
+            iconStyle={{ color: '#f5a700' }}
+            labelStyle={{ color: '#ffffff' }}
+            valueStyle={{ color: '#ffffff' }}
+          />
+          <StatCard 
+            label="Akurasi" 
+            value={`${dashboardStats.accuracy}%`} 
+            icon={Library} 
+            variant="lilac" 
+            containerStyle={{ backgroundColor: '#f95151' }}
+            iconContainerStyle={{ backgroundColor: '#ffffff' }}
+            iconStyle={{ color: '#f95151' }}
+            labelStyle={{ color: '#ffffff' }}
+            valueStyle={{ color: '#ffffff' }}
+          />
+          <StatCard label="Latihan Selesai" value={quizHistory.length} icon={Trophy} variant="warm" />
+          <StatCard label="Soalan Dijawab" value={dashboardStats.totalAttempts} icon={CheckCircle} variant="primary" />
+        </div>
+
+        <Card className="border-2 border-slate-50">
+          <h4 className="font-black text-ink mb-8 flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+              <BarChart2 className="w-5 h-5" />
+            </div>
+            Trend Markah Set
+          </h4>
+          
+          <div className="space-y-6">
+            {Object.keys(historyBySet).length === 0 ? (
+              <div className="text-center py-10">
+                <Mascot gender={user.gender} className="size-32 mx-auto mb-4" />
+                <p className="text-ink-muted font-bold">Belum ada sejarah latihan. Mari mulakan!</p>
+              </div>
+            ) : (
+              Object.entries(historyBySet).map(([key, setAttempts]: [string, any[]]) => {
+                const latest = setAttempts[setAttempts.length - 1];
+                const previous = setAttempts.length > 1 ? setAttempts[setAttempts.length - 2] : null;
+                const setTrend = previous ? latest.accuracy - previous.accuracy : 0;
+                
+                // Find topic name (simplified)
+                const topicName = setAttempts[0].set_name;
+
+                return (
+                  <div key={key} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col gap-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h5 className="font-black text-ink text-lg leading-tight">{topicName}</h5>
+                        <p className="text-[10px] font-black text-ink-muted uppercase tracking-widest mt-1">
+                          {setAttempts.length} Percubaan • Terakhir: {new Date(latest.timestamp).toLocaleDateString()}
+                        </p>
                       </div>
-                      <div className="w-full h-3 bg-slate-50 rounded-full border border-slate-100 overflow-hidden relative">
-                        {/* Attempted progress (lighter) */}
-                        <div 
-                          className="absolute inset-x-0 h-full bg-primary/20"
-                          style={{ width: `${stats.total > 0 ? (stats.attempted / stats.total) * 100 : 0}%` }}
-                        />
-                        {/* Mastered progress (darker) */}
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${stats.percentage}%` }}
-                          className="h-full bg-primary shadow-soft-sm relative z-10" 
-                        />
+                      <div className="text-right">
+                         <div className="flex items-center gap-2 justify-end">
+                           <span className="text-2xl font-black text-primary">{latest.accuracy}%</span>
+                           {setAttempts.length > 1 && (
+                             <span className={cn(
+                               "text-[10px] font-black px-1.5 py-0.5 rounded-lg",
+                               setTrend >= 0 ? "bg-accent-mint/20 text-emerald-600" : "bg-rose-100 text-rose-500"
+                             )}>
+                               {setTrend >= 0 ? '↑' : '↓'} {Math.abs(Math.round(setTrend))}%
+                             </span>
+                           )}
+                         </div>
+                         <span className="text-[10px] font-black text-ink-muted uppercase tracking-wider block">Markah Terkini</span>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
+
+                    {setAttempts.length > 1 && (
+                      <div className="h-24 w-full mt-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={setAttempts}>
+                            <defs>
+                              <linearGradient id={`grad-${key}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#587dff" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#587dff" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <Tooltip 
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="bg-white p-2 rounded-lg shadow-lg border border-slate-100 text-[10px] font-black">
+                                      <p className="text-primary">{payload[0].value}% Accuracy</p>
+                                      <p className="text-ink-muted">{new Date(payload[0].payload.timestamp).toLocaleDateString()}</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Area 
+                              type="monotone" 
+                              dataKey="accuracy" 
+                              stroke="#587dff" 
+                              strokeWidth={3}
+                              fillOpacity={1} 
+                              fill={`url(#grad-${key})`} 
+                              animationDuration={1500}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Card>
+      </div>
+    );
+  };
 
   const renderProfile = () => (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
