@@ -471,22 +471,35 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
               if (b === 'Lain-lain') return -1;
               return a.localeCompare(b, undefined, { numeric: true });
             })
-            .map((grade, idx) => (
-              <Card 
-                key={grade} 
-                variant="white"
-                className="flex flex-col items-start min-h-[160px] cursor-pointer group active:scale-95 border-2 border-slate-50 hover:border-primary/20"
-                onClick={() => setView({ type: 'browse_grade_subjects', grade })}
-              >
-                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft">
-                    <FolderOpen className="w-7 h-7 text-primary" />
-                </div>
-                <h4 className="text-xl font-black text-ink leading-tight mt-4">{grade}</h4>
-                <p className="text-xs font-bold text-ink-muted mt-1 uppercase tracking-widest">
-                  {groupedSubjects[grade]?.length || 0} Subjek
-                </p>
-              </Card>
-            ))
+            .map((grade, idx) => {
+              const folderColors = [
+                { bg: 'bg-[#587dff]', text: 'text-[#587dff]', h4: 'text-white', p: 'text-black' },
+                { bg: 'bg-[#ffd858]', text: 'text-[#ffd858]', h4: 'text-ink', p: 'text-ink-muted' },
+                { bg: 'bg-[#58ffca]', text: 'text-[#58ffca]', h4: 'text-ink', p: 'text-ink-muted' },
+                { bg: 'bg-[#ff587d]', text: 'text-[#ff587d]', h4: 'text-white', p: 'text-white/80' },
+              ];
+              const color = folderColors[idx % folderColors.length];
+              
+              return (
+                <Card 
+                  key={grade} 
+                  variant="white"
+                  className={cn(
+                    "flex flex-col items-start min-h-[160px] cursor-pointer group active:scale-95 border-none shadow-soft hover:shadow-soft-lg transition-all",
+                    color.bg
+                  )}
+                  onClick={() => setView({ type: 'browse_grade_subjects', grade })}
+                >
+                  <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft">
+                      <FolderOpen className={cn("w-7 h-7", color.text)} />
+                  </div>
+                  <h4 className={cn("text-xl font-black leading-tight mt-4", color.h4)}>{grade}</h4>
+                  <p className={cn("text-xs font-bold mt-1 uppercase tracking-widest", color.p)}>
+                    {groupedSubjects[grade]?.length || 0} Subjek
+                  </p>
+                </Card>
+              );
+            })
           ))}
 
           {view.type === 'browse_grade_subjects' && 
