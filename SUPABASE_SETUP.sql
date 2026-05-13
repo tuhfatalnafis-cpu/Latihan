@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.subjects (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   name text NOT NULL,
   description text,
+  grade text,
   created_by uuid REFERENCES auth.users ON DELETE SET NULL,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );

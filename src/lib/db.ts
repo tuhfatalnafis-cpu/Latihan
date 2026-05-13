@@ -210,23 +210,86 @@ export const db = {
       const { data, error } = await supabase
         .from('subjects')
         .select('*')
-        .order('name');
+        .order('name', { ascending: true });
       if (error) throw error;
-      return data as Subject[];
+      
+      return (data as any[]).map(s => {
+        // If the database has the grade column and it's filled, use it
+        if (s.grade) return s;
+        
+        // Fallback: Check for [Grade] Name pattern
+        const match = s.name.match(/^\[(.*?)\]\s*(.*)$/);
+        if (match) {
+          return { ...s, name: match[2], grade: match[1] };
+        }
+        return s;
+      }) as Subject[];
     },
     async create(subject: Partial<Subject>) {
+      const { grade, ...rest } = subject;
+      const finalName = grade ? `[${grade}] ${rest.name}` : rest.name;
+      
+      // Try with grade column first
+      try {
+        const { data, error } = await supabase
+          .from('subjects')
+          .insert([{ ...rest, name: finalName, grade }])
+          .select()
+          .single();
+        
+        if (!error) return data as Subject;
+      } catch (err) {
+        // Ignore and fallback
+      }
+
+      // Fallback: Insert without grade column
       const { data, error } = await supabase
         .from('subjects')
-        .insert([subject])
+        .insert([{ ...rest, name: finalName }])
         .select()
         .single();
+      
       if (error) throw error;
       return data as Subject;
     },
     async update(id: string, updates: Partial<Subject>) {
+      const { grade, ...rest } = updates;
+      
+      // If updating name or grade, we need to handle the prefix
+      if (rest.name || grade) {
+        // We need the current name to reconstruct correctly if only one is provided
+        const current = await this.list().then(list => list.find(s => s.id === id));
+        const newGrade = grade !== undefined ? grade : current?.grade;
+        const newName = rest.name !== undefined ? rest.name : current?.name;
+        
+        const finalName = newGrade ? `[${newGrade}] ${newName}` : newName;
+        
+        // Try with grade column
+        try {
+          const { data, error } = await supabase
+            .from('subjects')
+            .update({ ...rest, name: finalName, grade: newGrade })
+            .eq('id', id)
+            .select()
+            .single();
+          if (!error) return data as Subject;
+        } catch (err) {}
+
+        // Fallback
+        const { data, error } = await supabase
+          .from('subjects')
+          .update({ ...rest, name: finalName })
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data as Subject;
+      }
+
+      // Simple update (no name/grade change)
       const { data, error } = await supabase
         .from('subjects')
-        .update(updates)
+        .update(rest)
         .eq('id', id)
         .select()
         .single();

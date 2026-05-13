@@ -445,29 +445,53 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
             </div>
           )}
 
-          {view.type === 'browse_subjects' && subjects.map((s, idx) => {
-            const variants = ['mint', 'warm', 'lilac', 'primary'] as const;
-            return (
-              <Card 
-                key={s.id} 
-                variant="white"
-                className="flex flex-col items-start min-h-[160px] cursor-pointer group active:scale-95 border-2 border-slate-50 hover:border-primary/20"
-                onClick={() => setView({ type: 'browse_syllabi', subject: s })}
-              >
-                <div className={cn(
-                  "w-14 h-14 rounded-2xl flex items-center justify-center mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft",
-                  idx % 4 === 0 ? "bg-accent-mint/10" : idx % 4 === 1 ? "bg-accent-warm/10" : idx % 4 === 2 ? "bg-accent-lilac/10" : "bg-primary/10"
-                )}>
-                   <Library className={cn(
-                     "w-7 h-7",
-                     idx % 4 === 0 ? "text-accent-mint" : idx % 4 === 1 ? "text-accent-warm" : idx % 4 === 2 ? "text-accent-lilac" : "text-primary"
-                   )} />
-                </div>
-                <h4 className="text-xl font-black text-ink leading-tight mt-4">{s.name}</h4>
-                <p className="text-xs font-bold text-ink-muted mt-1 uppercase tracking-widest">Terokai subjek</p>
-              </Card>
-            );
-          })}
+          {view.type === 'browse_subjects' && Object.entries(
+            subjects.reduce((acc, s) => {
+              const grade = s.grade || 'Lain-lain';
+              if (!acc[grade]) acc[grade] = [];
+              acc[grade].push(s);
+              return acc;
+            }, {} as Record<string, Subject[]>)
+          )
+          .sort(([a], [b]) => {
+            if (a === 'Lain-lain') return 1;
+            if (b === 'Lain-lain') return -1;
+            return a.localeCompare(b, undefined, { numeric: true });
+          })
+          .map(([grade, gradeSubjects], gIdx) => (
+            <React.Fragment key={grade}>
+              <div className="col-span-full mt-4 mb-2">
+                <h5 className="text-sm font-black text-ink-muted uppercase tracking-[0.2em] flex items-center gap-3">
+                  <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg">{grade}</span>
+                  <div className="h-px flex-1 bg-slate-100" />
+                </h5>
+              </div>
+              {gradeSubjects.map((s, idx) => {
+                const variants = ['mint', 'warm', 'lilac', 'primary'] as const;
+                const vIdx = (gIdx + idx) % 4;
+                return (
+                  <Card 
+                    key={s.id} 
+                    variant="white"
+                    className="flex flex-col items-start min-h-[160px] cursor-pointer group active:scale-95 border-2 border-slate-50 hover:border-primary/20"
+                    onClick={() => setView({ type: 'browse_syllabi', subject: s })}
+                  >
+                    <div className={cn(
+                      "w-14 h-14 rounded-2xl flex items-center justify-center mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft",
+                      vIdx === 0 ? "bg-accent-mint/10" : vIdx === 1 ? "bg-accent-warm/10" : vIdx === 2 ? "bg-accent-lilac/10" : "bg-primary/10"
+                    )}>
+                       <Library className={cn(
+                         "w-7 h-7",
+                         vIdx === 0 ? "text-accent-mint" : vIdx === 1 ? "text-accent-warm" : vIdx === 2 ? "text-accent-lilac" : "text-primary"
+                       )} />
+                    </div>
+                    <h4 className="text-xl font-black text-ink leading-tight mt-4">{s.name}</h4>
+                    <p className="text-xs font-bold text-ink-muted mt-1 uppercase tracking-widest">Terokai subjek</p>
+                  </Card>
+                );
+              })}
+            </React.Fragment>
+          ))}
 
           {view.type === 'browse_syllabi' && syllabi.map(s => (
             <Card 
@@ -593,39 +617,63 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           </div>
           Penguasaan Subjek
         </h4>
-        <div className="space-y-8">
-          {subjects.map(s => {
-            const stats = (subjectMastery[s.id] as any) || { percentage: 0, accuracy: 0, total: 0, mastered: 0, attempted: 0 };
-            return (
-              <div key={s.id} className="space-y-3">
-                <div className="flex justify-between text-sm items-center">
-                  <div>
-                    <span className="font-black text-ink text-lg block">{s.name}</span>
-                    <span className="text-[10px] font-black text-ink-muted uppercase tracking-wider">
-                      {stats.mastered} dikuasai • {stats.attempted} dicuba • {stats.accuracy}% akurasi
-                    </span>
-                  </div>
-                  <div className="text-right">
-                     <span className="text-[10px] font-black text-primary uppercase block mb-1">Masteri</span>
-                     <span className="font-black text-primary bg-primary/5 px-3 py-1 rounded-full">{stats.percentage}%</span>
-                  </div>
-                </div>
-                <div className="w-full h-3 bg-slate-50 rounded-full border border-slate-100 overflow-hidden relative">
-                  {/* Attempted progress (lighter) */}
-                  <div 
-                    className="absolute inset-x-0 h-full bg-primary/20"
-                    style={{ width: `${stats.total > 0 ? (stats.attempted / stats.total) * 100 : 0}%` }}
-                  />
-                  {/* Mastered progress (darker) */}
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${stats.percentage}%` }}
-                    className="h-full bg-primary shadow-soft-sm relative z-10" 
-                  />
-                </div>
+        <div className="space-y-12">
+          {Object.entries(
+            subjects.reduce((acc, s) => {
+              const grade = s.grade || 'Lain-lain';
+              if (!acc[grade]) acc[grade] = [];
+              acc[grade].push(s);
+              return acc;
+            }, {} as Record<string, Subject[]>)
+          )
+          .sort(([a], [b]) => {
+            if (a === 'Lain-lain') return 1;
+            if (b === 'Lain-lain') return -1;
+            return a.localeCompare(b, undefined, { numeric: true });
+          })
+          .map(([grade, gradeSubjects]) => (
+            <div key={grade} className="space-y-6">
+              <h5 className="text-sm font-black text-ink-muted uppercase tracking-[0.2em] flex items-center gap-3">
+                <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg">{grade}</span>
+                <div className="h-px flex-1 bg-slate-100" />
+              </h5>
+              
+              <div className="space-y-8">
+                {gradeSubjects.map(s => {
+                  const stats = (subjectMastery[s.id] as any) || { percentage: 0, accuracy: 0, total: 0, mastered: 0, attempted: 0 };
+                  return (
+                    <div key={s.id} className="space-y-3">
+                      <div className="flex justify-between text-sm items-center">
+                        <div>
+                          <span className="font-black text-ink text-lg block">{s.name}</span>
+                          <span className="text-[10px] font-black text-ink-muted uppercase tracking-wider">
+                            {stats.mastered} dikuasai • {stats.attempted} dicuba • {stats.accuracy}% akurasi
+                          </span>
+                        </div>
+                        <div className="text-right">
+                           <span className="text-[10px] font-black text-primary uppercase block mb-1">Masteri</span>
+                           <span className="font-black text-primary bg-primary/5 px-3 py-1 rounded-full">{stats.percentage}%</span>
+                        </div>
+                      </div>
+                      <div className="w-full h-3 bg-slate-50 rounded-full border border-slate-100 overflow-hidden relative">
+                        {/* Attempted progress (lighter) */}
+                        <div 
+                          className="absolute inset-x-0 h-full bg-primary/20"
+                          style={{ width: `${stats.total > 0 ? (stats.attempted / stats.total) * 100 : 0}%` }}
+                        />
+                        {/* Mastered progress (darker) */}
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${stats.percentage}%` }}
+                          className="h-full bg-primary shadow-soft-sm relative z-10" 
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </Card>
     </div>

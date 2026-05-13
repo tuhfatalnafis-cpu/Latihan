@@ -51,6 +51,7 @@ export interface Subject {
   id: string;
   name: string;
   description?: string;
+  grade?: string;
   created_by: string;
   created_at: string;
 }
