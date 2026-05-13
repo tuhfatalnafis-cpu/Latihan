@@ -44,6 +44,7 @@ type TabState = 'dashboard' | 'subjects' | 'progress' | 'profile';
 
 type ViewState = 
   | { type: 'browse_subjects' }
+  | { type: 'browse_grade_subjects', grade: string }
   | { type: 'browse_syllabi', subject: Subject }
   | { type: 'browse_topics', subject: Subject, syllabus: Syllabus }
   | { type: 'browse_sets', subject: Subject, syllabus: Syllabus, topic: Topic, sets: string[] }
@@ -66,6 +67,15 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     totalMastered: number
   }>({ streak: 0, totalQuestions: 0, totalCorrect: 0, totalAttempts: 0, accuracy: 0, totalTimeMs: 0, totalMastered: 0 });
   const [loading, setLoading] = useState(true);
+
+  const groupedSubjects = React.useMemo(() => {
+    return subjects.reduce((acc, s) => {
+      const grade = s.grade || 'Lain-lain';
+      if (!acc[grade]) acc[grade] = [];
+      acc[grade].push(s);
+      return acc;
+    }, {} as Record<string, Subject[]>);
+  }, [subjects]);
 
   const [subjectMastery, setSubjectMastery] = useState<Record<string, { percentage: number, accuracy: number, total: number, mastered: number, attempted: number }>>({});
 
@@ -177,7 +187,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     
     setLoading(true);
     try {
-      if (view.type === 'browse_subjects' || activeTab === 'progress') {
+      if (view.type === 'browse_subjects' || view.type === 'browse_grade_subjects' || activeTab === 'progress') {
         const data = await db.subjects.list();
         setSubjects(data);
       }
@@ -202,6 +212,10 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         });
         
         setTopicStats(stats);
+      } else if (view.type === 'browse_grade_subjects' && subjects.length === 0) {
+        // Ensure subjects are loaded if navigating deep or on refresh
+        const data = await db.subjects.list();
+        setSubjects(data);
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -412,14 +426,21 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-black text-ink tracking-tight">
-          {view.type === 'browse_subjects' ? 'Pilih Subjek' : view.type === 'browse_syllabi' ? view.subject.name : view.type === 'browse_topics' ? view.syllabus.name : 'Pilih Set'}
+          {view.type === 'browse_subjects' ? 'Pilih Gred' : 
+           view.type === 'browse_grade_subjects' ? view.grade :
+           view.type === 'browse_syllabi' ? view.subject.name : 
+           view.type === 'browse_topics' ? view.syllabus.name : 'Pilih Set'}
         </h3>
         {view.type !== 'browse_subjects' && (
           <Button 
             variant="ghost" 
             size="sm"
             onClick={() => {
-              if (view.type === 'browse_syllabi') setView({ type: 'browse_subjects' });
+              if (view.type === 'browse_grade_subjects') setView({ type: 'browse_subjects' });
+              else if (view.type === 'browse_syllabi') {
+                 const currentGrade = view.subject.grade || 'Lain-lain';
+                 setView({ type: 'browse_grade_subjects', grade: currentGrade });
+              }
               else if (view.type === 'browse_topics') setView({ type: 'browse_syllabi', subject: (view as any).subject });
               else if (view.type === 'browse_sets') setView({ type: 'browse_topics', subject: view.subject, syllabus: view.syllabus });
             }}
@@ -437,38 +458,45 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-20">
-          {view.type === 'browse_subjects' && subjects.length === 0 && (
+          {view.type === 'browse_subjects' && (Object.keys(groupedSubjects).length === 0 ? (
             <div className="col-span-full py-20 flex flex-col items-center justify-center text-center animate-in fade-in zoom-in">
                <Mascot gender={user.gender} className="size-44 mb-6" />
                <p className="font-black text-2xl text-ink">Belum ada subjek tersedia.</p>
                <p className="text-sm text-ink-muted mt-2 font-bold max-w-[280px]">Guru anda akan menambah kandungan tidak lama lagi! Mari semak semula nanti.</p>
             </div>
-          )}
+          ) : (
+            Object.keys(groupedSubjects)
+            .sort((a, b) => {
+              if (a === 'Lain-lain') return 1;
+              if (b === 'Lain-lain') return -1;
+              return a.localeCompare(b, undefined, { numeric: true });
+            })
+            .map((grade, idx) => (
+              <Card 
+                key={grade} 
+                variant="white"
+                className="flex flex-col items-start min-h-[160px] cursor-pointer group active:scale-95 border-2 border-slate-50 hover:border-primary/20"
+                onClick={() => setView({ type: 'browse_grade_subjects', grade })}
+              >
+                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft">
+                    <FolderOpen className="w-7 h-7 text-primary" />
+                </div>
+                <h4 className="text-xl font-black text-ink leading-tight mt-4">{grade}</h4>
+                <p className="text-xs font-bold text-ink-muted mt-1 uppercase tracking-widest">
+                  {groupedSubjects[grade]?.length || 0} Subjek
+                </p>
+              </Card>
+            ))
+          ))}
 
-          {view.type === 'browse_subjects' && Object.entries(
-            subjects.reduce((acc, s) => {
-              const grade = s.grade || 'Lain-lain';
-              if (!acc[grade]) acc[grade] = [];
-              acc[grade].push(s);
-              return acc;
-            }, {} as Record<string, Subject[]>)
-          )
-          .sort(([a], [b]) => {
-            if (a === 'Lain-lain') return 1;
-            if (b === 'Lain-lain') return -1;
-            return a.localeCompare(b, undefined, { numeric: true });
-          })
-          .map(([grade, gradeSubjects], gIdx) => (
-            <React.Fragment key={grade}>
-              <div className="col-span-full mt-4 mb-2">
-                <h5 className="text-sm font-black text-ink-muted uppercase tracking-[0.2em] flex items-center gap-3">
-                  <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg">{grade}</span>
-                  <div className="h-px flex-1 bg-slate-100" />
-                </h5>
-              </div>
-              {gradeSubjects.map((s, idx) => {
-                const variants = ['mint', 'warm', 'lilac', 'primary'] as const;
-                const vIdx = (gIdx + idx) % 4;
+          {view.type === 'browse_grade_subjects' && 
+            subjects
+              .filter(s => (s.grade || 'Lain-lain') === view.grade)
+              .map((s, idx) => {
+                const colors = ['bg-accent-mint', 'bg-accent-warm', 'bg-accent-lilac', 'bg-primary'];
+                const textColors = ['text-accent-mint', 'text-accent-warm', 'text-accent-lilac', 'text-primary'];
+                const colorIdx = idx % colors.length;
+
                 return (
                   <Card 
                     key={s.id} 
@@ -478,20 +506,16 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
                   >
                     <div className={cn(
                       "w-14 h-14 rounded-2xl flex items-center justify-center mb-auto group-hover:scale-110 group-hover:-rotate-6 transition-transform shadow-soft",
-                      vIdx === 0 ? "bg-accent-mint/10" : vIdx === 1 ? "bg-accent-warm/10" : vIdx === 2 ? "bg-accent-lilac/10" : "bg-primary/10"
+                      colors[colorIdx] + "/10"
                     )}>
-                       <Library className={cn(
-                         "w-7 h-7",
-                         vIdx === 0 ? "text-accent-mint" : vIdx === 1 ? "text-accent-warm" : vIdx === 2 ? "text-accent-lilac" : "text-primary"
-                       )} />
+                       <Library className={cn("w-7 h-7", textColors[colorIdx])} />
                     </div>
                     <h4 className="text-xl font-black text-ink leading-tight mt-4">{s.name}</h4>
                     <p className="text-xs font-bold text-ink-muted mt-1 uppercase tracking-widest">Terokai subjek</p>
                   </Card>
                 );
-              })}
-            </React.Fragment>
-          ))}
+              })
+          }
 
           {view.type === 'browse_syllabi' && syllabi.map(s => (
             <Card 
@@ -618,14 +642,7 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           Penguasaan Subjek
         </h4>
         <div className="space-y-12">
-          {Object.entries(
-            subjects.reduce((acc, s) => {
-              const grade = s.grade || 'Lain-lain';
-              if (!acc[grade]) acc[grade] = [];
-              acc[grade].push(s);
-              return acc;
-            }, {} as Record<string, Subject[]>)
-          )
+          {Object.entries(groupedSubjects)
           .sort(([a], [b]) => {
             if (a === 'Lain-lain') return 1;
             if (b === 'Lain-lain') return -1;

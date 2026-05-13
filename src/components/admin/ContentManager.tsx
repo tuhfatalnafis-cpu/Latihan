@@ -30,6 +30,7 @@ interface ContentManagerProps {
 
 type ViewState = 
   | { type: 'subjects' }
+  | { type: 'grade_subjects', grade: string }
   | { type: 'syllabi', subject: Subject }
   | { type: 'topics', subject: Subject, syllabus: Syllabus }
   | { type: 'topic_detail', subject: Subject, syllabus: Syllabus, topic: Topic };
@@ -40,6 +41,16 @@ export default function ContentManager({ user }: ContentManagerProps) {
   const [syllabi, setSyllabi] = useState<Syllabus[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const groupedSubjects = React.useMemo(() => {
+    return subjects.reduce((acc, s) => {
+      const grade = s.grade || 'Lain-lain';
+      if (!acc[grade]) acc[grade] = [];
+      acc[grade].push(s);
+      return acc;
+    }, {} as Record<string, Subject[]>);
+  }, [subjects]);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemGrade, setNewItemGrade] = useState('');
@@ -67,7 +78,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      if (view.type === 'subjects') {
+      if (view.type === 'subjects' || view.type === 'grade_subjects') {
         const data = await db.subjects.list();
         setSubjects(data);
       } else if (view.type === 'syllabi') {
@@ -87,7 +98,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
   const handleCreate = async () => {
     if (!newItemName.trim()) return;
     try {
-      if (view.type === 'subjects') {
+      if (view.type === 'subjects' || view.type === 'grade_subjects') {
         await db.subjects.create({ name: newItemName, grade: newItemGrade, created_by: user.id });
       } else if (view.type === 'syllabi') {
         await db.syllabi.create({ name: newItemName, subject_id: view.subject.id, created_by: user.id });
@@ -110,7 +121,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
     e.preventDefault();
     if (!editingItem || !editingItem.name.trim()) return;
     try {
-      if (view.type === 'subjects') await db.subjects.update(editingItem.id, { name: editingItem.name, grade: editingItem.grade });
+      if (view.type === 'subjects' || view.type === 'grade_subjects') await db.subjects.update(editingItem.id, { name: editingItem.name, grade: editingItem.grade });
       else if (view.type === 'syllabi') await db.syllabi.update(editingItem.id, { name: editingItem.name });
       setEditingItem(null);
       fetchData();
@@ -128,7 +139,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
       let message = '';
       let title = '';
 
-      if (view.type === 'subjects') {
+      if (view.type === 'subjects' || view.type === 'grade_subjects') {
         const { data: syData } = await supabase.from('syllabi').select('id').eq('subject_id', id);
         const syIds = syData?.map(s => s.id) || [];
         
@@ -183,7 +194,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
     setIsDeleting(true);
     try {
       let error;
-      if (view.type === 'subjects') {
+      if (view.type === 'subjects' || view.type === 'grade_subjects') {
         const res = await supabase.from('subjects').delete().eq('id', id);
         error = res.error;
       } else if (view.type === 'syllabi') {
@@ -209,7 +220,14 @@ export default function ContentManager({ user }: ContentManagerProps) {
 
   const renderBreadcrumbs = () => {
     const crumbs = [{ label: 'Subjek', view: { type: 'subjects' } as ViewState }];
-    if ('subject' in view) crumbs.push({ label: view.subject.name, view: { type: 'syllabi', subject: view.subject } as ViewState });
+    if (view.type === 'grade_subjects') {
+      crumbs.push({ label: view.grade, view: { type: 'grade_subjects', grade: view.grade } as ViewState });
+    }
+    if ('subject' in view) {
+      const subjectGrade = view.subject.grade || 'Lain-lain';
+      crumbs.push({ label: subjectGrade, view: { type: 'grade_subjects', grade: subjectGrade } as ViewState });
+      crumbs.push({ label: view.subject.name, view: { type: 'syllabi', subject: view.subject } as ViewState });
+    }
     if ('syllabus' in view) crumbs.push({ label: view.syllabus.name, view: { type: 'topics', subject: view.subject, syllabus: view.syllabus } as ViewState });
     if ('topic' in view) crumbs.push({ label: view.topic.name, view: view });
 
@@ -261,7 +279,8 @@ export default function ContentManager({ user }: ContentManagerProps) {
               variant="ghost"
               size="sm"
               onClick={() => {
-                if (view.type === 'syllabi') setView({ type: 'subjects' });
+                if (view.type === 'grade_subjects') setView({ type: 'subjects' });
+                else if (view.type === 'syllabi') setView({ type: 'grade_subjects', grade: view.subject.grade || 'Lain-lain' });
                 else if (view.type === 'topics') setView({ type: 'syllabi', subject: view.subject });
               }}
               className="p-2 h-10 w-10"
@@ -271,16 +290,25 @@ export default function ContentManager({ user }: ContentManagerProps) {
           )}
           <h1 className="text-3xl font-black text-ink tracking-tight">
             {view.type === 'subjects' ? 'Kandungan Akademik' : 
+             view.type === 'grade_subjects' ? view.grade :
              view.type === 'syllabi' ? view.subject.name :
-             view.syllabus.name}
+             view.type === 'topics' ? view.syllabus.name :
+             'Kandungan'}
           </h1>
         </div>
         <Button 
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            if (view.type === 'grade_subjects') {
+              setNewItemGrade(view.grade === 'Lain-lain' ? '' : view.grade);
+            } else {
+              setNewItemGrade('');
+            }
+            setShowAddModal(true);
+          }}
           className="rounded-[2rem] px-8 shadow-soft-lg group"
         >
           <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" /> 
-          Tambah {view.type === 'subjects' ? 'Subjek' : view.type === 'syllabi' ? 'Silibus' : 'Topik'}
+          Tambah {(view.type === 'subjects' || view.type === 'grade_subjects') ? 'Subjek' : view.type === 'syllabi' ? 'Silibus' : 'Topik'}
         </Button>
       </div>
 
@@ -296,95 +324,102 @@ export default function ContentManager({ user }: ContentManagerProps) {
           layout
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
         >
-          {view.type === 'subjects' && Object.entries(
-            subjects.reduce((acc, s) => {
-              const grade = s.grade || 'Lain-lain';
-              if (!acc[grade]) acc[grade] = [];
-              acc[grade].push(s);
-              return acc;
-            }, {} as Record<string, Subject[]>)
-          )
-          .sort(([a], [b]) => {
-            if (a === 'Lain-lain') return 1;
-            if (b === 'Lain-lain') return -1;
-            return a.localeCompare(b, undefined, { numeric: true });
-          })
-          .map(([grade, gradeSubjects]) => (
-            <React.Fragment key={grade}>
-              <div className="col-span-full mt-4 mb-2">
-                <h5 className="text-sm font-black text-ink-muted uppercase tracking-[0.2em] flex items-center gap-3">
-                  <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg">{grade}</span>
-                  <div className="h-px flex-1 bg-slate-100" />
-                </h5>
-              </div>
-              {gradeSubjects.map(s => (
-                <Card 
-                  key={s.id} 
-                  onClick={() => setView({ type: 'syllabi', subject: s })}
-                  className="cursor-pointer group relative overflow-hidden flex flex-col"
-                  hover
-                >
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="p-4 bg-primary/5 text-primary rounded-2xl w-fit group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300">
-                      <BookOpen className="w-8 h-8" />
-                    </div>
-                    {s.grade && (
-                      <span className="bg-slate-100 text-ink-muted text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider">
-                        {s.grade}
-                      </span>
-                    )}
-                  </div>
-                  
-                  {editingItem?.id === s.id ? (
-                    <form onClick={e => e.stopPropagation()} onSubmit={handleUpdate} className="flex flex-col gap-3">
-                       <div>
-                         <label className="text-[10px] font-black text-ink-muted uppercase tracking-widest block mb-1">Nama Subjek</label>
-                         <input 
-                           value={editingItem.name}
-                           onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
-                           className="w-full px-4 py-2 border-2 border-primary/20 rounded-xl outline-none focus:border-primary font-bold bg-slate-50"
-                           autoFocus
-                         />
-                       </div>
-                       <div>
-                         <label className="text-[10px] font-black text-ink-muted uppercase tracking-widest block mb-1">Gred / Tahun</label>
-                         <input 
-                           value={editingItem.grade || ''}
-                           onChange={e => setEditingItem({ ...editingItem, grade: e.target.value })}
-                           placeholder="Contoh: Tahun 1"
-                           className="w-full px-4 py-2 border-2 border-primary/20 rounded-xl outline-none focus:border-primary font-bold bg-slate-50"
-                         />
-                       </div>
-                       <Button type="submit" size="sm" className="w-full py-3"><CheckCircle2 className="w-5 h-5 mr-2" /> Simpan</Button>
-                    </form>
-                  ) : (
-                    <>
-                      <h3 className="text-xl font-black text-ink mb-2 group-hover:text-primary transition-colors">{s.name}</h3>
-                      <p className="text-ink-muted font-medium text-sm leading-relaxed">Klik untuk urus silibus dan modul subjek ini.</p>
-                    </>
-                  )}
-                  
-                  <div className="mt-auto pt-6 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                    <div className="flex gap-1">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setEditingItem({ id: s.id, name: s.name, grade: s.grade }); }}
-                        className="p-2 text-ink-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={(e) => handleDeleteClick(s.id, s.name, e)}
-                        className="p-2 text-ink-muted hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-primary opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0 transition-all duration-300" />
-                  </div>
-                </Card>
-              ))}
-            </React.Fragment>
+          {view.type === 'subjects' && (Object.keys(groupedSubjects).length === 0 ? null : (
+            Object.keys(groupedSubjects)
+            .sort((a, b) => {
+              if (a === 'Lain-lain') return 1;
+              if (b === 'Lain-lain') return -1;
+              return a.localeCompare(b, undefined, { numeric: true });
+            })
+            .map((grade) => (
+              <Card 
+                key={grade} 
+                onClick={() => setView({ type: 'grade_subjects', grade })}
+                className="cursor-pointer group relative overflow-hidden flex flex-col min-h-[160px]"
+                hover
+              >
+                <div className="p-4 bg-primary/5 text-primary rounded-2xl w-fit group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300">
+                  <FolderOpen className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-black text-ink mt-4 mb-1 group-hover:text-primary transition-colors">{grade}</h3>
+                <p className="text-ink-muted font-medium text-xs">
+                  {groupedSubjects[grade]?.length || 0} Subjek tersedia
+                </p>
+                <div className="mt-auto pt-4 flex justify-end">
+                   <ChevronRight className="w-5 h-5 text-primary opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0 transition-all duration-300" />
+                </div>
+              </Card>
+            ))
           ))}
+
+          {view.type === 'grade_subjects' && subjects
+            .filter(s => (s.grade || 'Lain-lain') === view.grade)
+            .map(s => (
+              <Card 
+                key={s.id} 
+                onClick={() => setView({ type: 'syllabi', subject: s })}
+                className="cursor-pointer group relative overflow-hidden flex flex-col"
+                hover
+              >
+                <div className="flex justify-between items-start mb-6">
+                  <div className="p-4 bg-primary/5 text-primary rounded-2xl w-fit group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300">
+                    <BookOpen className="w-8 h-8" />
+                  </div>
+                  {s.grade && (
+                    <span className="bg-slate-100 text-ink-muted text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider">
+                      {s.grade}
+                    </span>
+                  )}
+                </div>
+                
+                {editingItem?.id === s.id ? (
+                  <form onClick={e => e.stopPropagation()} onSubmit={handleUpdate} className="flex flex-col gap-3">
+                     <div>
+                       <label className="text-[10px] font-black text-ink-muted uppercase tracking-widest block mb-1">Nama Subjek</label>
+                       <input 
+                         value={editingItem.name}
+                         onChange={e => setEditingItem({ ...editingItem, name: e.target.value })}
+                         className="w-full px-4 py-2 border-2 border-primary/20 rounded-xl outline-none focus:border-primary font-bold bg-slate-50"
+                         autoFocus
+                       />
+                     </div>
+                     <div>
+                       <label className="text-[10px] font-black text-ink-muted uppercase tracking-widest block mb-1">Gred / Tahun</label>
+                       <input 
+                         value={editingItem.grade || ''}
+                         onChange={e => setEditingItem({ ...editingItem, grade: e.target.value })}
+                         placeholder="Contoh: Tahun 1"
+                         className="w-full px-4 py-2 border-2 border-primary/20 rounded-xl outline-none focus:border-primary font-bold bg-slate-50"
+                       />
+                     </div>
+                     <Button type="submit" size="sm" className="w-full py-3"><CheckCircle2 className="w-5 h-5 mr-2" /> Simpan</Button>
+                  </form>
+                ) : (
+                  <>
+                    <h3 className="text-xl font-black text-ink mb-2 group-hover:text-primary transition-colors">{s.name}</h3>
+                    <p className="text-ink-muted font-medium text-sm leading-relaxed">Klik untuk urus silibus dan modul subjek ini.</p>
+                  </>
+                )}
+                
+                <div className="mt-auto pt-6 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                  <div className="flex gap-1">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setEditingItem({ id: s.id, name: s.name, grade: s.grade }); }}
+                      className="p-2 text-ink-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={(e) => handleDeleteClick(s.id, s.name, e)}
+                      className="p-2 text-ink-muted hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-primary opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0 transition-all duration-300" />
+                </div>
+              </Card>
+            ))}
 
           {view.type === 'syllabi' && syllabi.map(s => (
             <Card 
