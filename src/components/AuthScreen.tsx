@@ -141,7 +141,10 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
             Cepat <br />
             Belajar
           </motion.h1>
-          <p className="text-white/80 font-bold mt-4 text-xl">Masa depan bermula di sini.</p>
+          <div className="mt-4 space-y-1">
+            <p className="text-white/80 font-bold text-xl">Masa depan bermula di sini.</p>
+            <p className="text-white/60 font-black text-xs uppercase tracking-[0.3em]">education app by TeamAra</p>
+          </div>
         </div>
 
         {/* Main Illustration: Rocket & Floating Icons */}

@@ -89,8 +89,6 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     }, {} as Record<string, Subject[]>);
   }, [subjects]);
 
-  const [subjectMastery, setSubjectMastery] = useState<Record<string, { percentage: number, accuracy: number, total: number, mastered: number, attempted: number }>>({});
-
   useEffect(() => {
     const init = async () => {
       await fetchData();
@@ -106,81 +104,6 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       setQuizHistory(profile.metadata?.quiz_history || []);
     } catch (err) {
       console.error('Error fetching quiz history:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'progress' && subjects.length > 0) {
-      fetchSubjectMastery();
-    }
-  }, [activeTab, subjects]);
-
-  const fetchSubjectMastery = async () => {
-    try {
-      const mastery: Record<string, { percentage: number, total: number, mastered: number, attempted: number }> = {};
-      
-      const subjectStatsPromises = subjects.map(async (subject) => {
-        // Find topics for this subject
-        const subjectSyllabi = await db.syllabi.listForSubject(subject.id);
-        
-        // Parallelize fetching topics for all syllabi
-        const allTopicsResults = await Promise.all(
-          subjectSyllabi.map(s => db.topics.listForSyllabus(s.id))
-        );
-        const subjectTopicIds = allTopicsResults.flat().map(t => t.id);
-
-        if (subjectTopicIds.length === 0) {
-          return { id: subject.id, stats: { percentage: 0, total: 0, mastered: 0, attempted: 0 } };
-        }
-
-        // Parallelize fetching stats for all topics
-        const topicStats = await Promise.all(
-          subjectTopicIds.map(topicId => db.topics.getStats(topicId, user.id))
-        );
-
-        let total = 0;
-        let mastered = 0;
-        let attempted = 0;
-        let accuracySum = 0;
-        let percentageSum = 0;
-        let topicsWithQuestions = 0;
-        let topicsWithAttempts = 0;
-        
-        for (const s of topicStats) {
-          total += s.total;
-          mastered += s.mastered;
-          attempted += (s as any).attempted || 0;
-          if (s.total > 0) {
-            percentageSum += (s as any).masteryPercentage || 0;
-            topicsWithQuestions++;
-          }
-          if ((s as any).attempted > 0) {
-            accuracySum += (s as any).accuracy || 0;
-            topicsWithAttempts++;
-          }
-        }
-
-        return { 
-          id: subject.id, 
-          stats: { 
-            percentage: topicsWithQuestions > 0 ? Math.round(percentageSum / topicsWithQuestions) : 0,
-            accuracy: topicsWithAttempts > 0 ? Math.round(accuracySum / topicsWithAttempts) : 0,
-            total,
-            mastered,
-            attempted
-          } 
-        };
-      });
-
-      const results = await Promise.all(subjectStatsPromises);
-      const masteryMap: Record<string, any> = {};
-      results.forEach(res => {
-        masteryMap[res.id] = res.stats;
-      });
-      
-      setSubjectMastery(masteryMap);
-    } catch (err) {
-      console.error('Error fetching subject mastery:', err);
     }
   };
 
