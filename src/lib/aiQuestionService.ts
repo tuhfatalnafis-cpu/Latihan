@@ -31,6 +31,13 @@ export async function generateQuestionsWithFiles(
       - 'general': For comprehension or other subject-based questions where translation direction is not applicable.
     - Each question must have exactly 3 distractors (wrong but plausible answers).
     - Text must be accurate and include appropriate formatting (e.g., harakat for Arabic).
+    - IMPORTANT: When generating content in Jawi (Malay written in Arabic script), you MUST follow standard Jawi spelling principles using these specific characters:
+      * چ (Ca) - U+0686
+      * ڠ (Nga) - U+06A9 or U+06A2 (prefer standard Jawi ڠ U+06A0)
+      * ڤ (Pa) - U+06A4
+      * ݢ (Ga) - U+06A2
+      * ۏ (Va) - U+068F
+      * ڽ (Nya) - U+06BD
     - Adapt the question style to the user's specific prompt or provided files.
     - Return ONLY a clean JSON array. No conversational text.
   `;

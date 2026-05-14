@@ -25,7 +25,7 @@ import {
 import { db } from '../../lib/db';
 import { Question, Topic } from '../../lib/supabase';
 import { User } from '../../types';
-import { cn } from '../../lib/utils';
+import { cn, fixJawiSpelling } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import VocabImporter from './VocabImporter';
 import QuestionGenerator from './QuestionGenerator';
@@ -71,6 +71,59 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
     onConfirm: () => {},
   });
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleNormalizeJawi = async () => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Normalisasi Ejaan Jawi?',
+      message: 'Ini akan cuba membetulkan ejaan Jawi (چ, ڠ, ڤ, ݢ, ۏ, ڽ) dalam semua soalan dan kosa kata dalam topik ini mengikut prinsip standard. Adakah anda pasti?',
+      onConfirm: async () => {
+        setIsDeleting(true);
+        try {
+          // Fix questions
+          const updatedQs = questions.map(q => {
+            const metadata = q.metadata as any;
+            const direction = metadata?.direction;
+            
+            return {
+              ...q,
+              prompt_fixed: direction === 'ar_to_ms' ? fixJawiSpelling(q.prompt) : q.prompt,
+              answer_fixed: direction === 'ms_to_ar' ? fixJawiSpelling(q.answer) : q.answer,
+            };
+          });
+
+          const qPromises = updatedQs
+            .filter(q => q.prompt_fixed !== q.prompt || q.answer_fixed !== q.answer)
+            .map(q => supabase.from('questions').update({ 
+               prompt: q.prompt_fixed, 
+               answer: q.answer_fixed 
+            }).eq('id', q.id));
+
+          // Fix vocabulary
+          const updatedVocabs = vocabulary.map(v => ({
+            ...v,
+            arabic_fixed: fixJawiSpelling(v.arabic),
+          }));
+
+          const vPromises = updatedVocabs
+            .filter(v => v.arabic_fixed !== v.arabic)
+            .map(v => supabase.from('vocabulary').update({ 
+               arabic: v.arabic_fixed 
+            }).eq('id', v.id));
+
+          await Promise.all([...qPromises, ...vPromises]);
+          
+          toast.success('Normalisasi Jawi berjaya!');
+          fetchData();
+        } catch (err: any) {
+          toast.error('Gagal normalisasi: ' + err.message);
+        } finally {
+          setIsDeleting(false);
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  };
 
   useEffect(() => {
     fetchData();
@@ -265,6 +318,14 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
         </div>
         
         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+          <Button 
+            variant="ghost"
+            onClick={handleNormalizeJawi}
+            className="rounded-[1.5rem] h-14 bg-slate-50 text-ink-muted hover:text-primary"
+            title="Betulkan ejaan Jawi"
+          >
+            <Sparkles className="w-5 h-5 mr-2" /> Normalize Jawi
+          </Button>
           <Button 
             onClick={() => setShowImporter(true)}
             className="rounded-[1.5rem] bg-primary hover:bg-primary/90 shadow-soft-lg group h-14"

@@ -32,7 +32,7 @@ Pilih 3 distraktor yang PALING dekat secara makna dengan jawapan betul tetapi te
       model: "gemini-3-flash-preview",
       contents: promptText,
       config: {
-        systemInstruction: "Anda adalah pakar bahasa Arab. Kembalikan jawapan dalam format JSON sahaja: {\"distractors\": [\"...\", \"...\", \"...\"]}",
+        systemInstruction: "Anda adalah pakar bahasa Arab dan Jawi. Kembalikan jawapan dalam format JSON sahaja: {\"distractors\": [\"...\", \"...\", \"...\"]}. \n\nIMPORTANT: Jika menggunakan Jawi, pastikan menggunakan aksara standard: چ (Ca), ڠ (Nga), ڤ (Pa), ݢ (Ga), ۏ (Va), ڽ (Nya).",
         thinkingConfig: {
           thinkingLevel: ThinkingLevel.LOW
         },
