@@ -3,6 +3,7 @@
 
 @theme {
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-arabic: "Amiri", serif;
 
   --color-primary: #4F7CFF;
@@ -20,11 +21,12 @@
 @utility text-arabic {
   font-family: "Amiri", serif !important;
   direction: rtl;
-  line-height: normal;
+  line-height: 1.6;
+  font-feature-settings: "kern", "liga", "clig", "calt";
 }
 
-/* Global fix for Jawi/Arabic font to ensure Amiri is used */
-[dir="rtl"], .text-arabic, [lang="ar"] {
+/* Global fix for Jawi/Arabic font to ensure Amiri is used exclusively */
+[dir="rtl"], .text-arabic, [lang="ar"], [lang="ms-Arab"], .arabic-text {
   font-family: "Amiri", serif !important;
 }
 
