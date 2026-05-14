@@ -18,9 +18,14 @@
 }
 
 @utility text-arabic {
-  font-family: var(--font-arabic);
+  font-family: "Amiri", serif !important;
   direction: rtl;
-  line-height: 1.6;
+  line-height: normal;
+}
+
+/* Global fix for Jawi/Arabic font to ensure Amiri is used */
+[dir="rtl"], .text-arabic, [lang="ar"] {
+  font-family: "Amiri", serif !important;
 }
 
 body {
