@@ -55,21 +55,26 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   const [savedSession, setSavedSession] = useState<any>(null);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
 
+  const sessionKey = useMemo(() => {
+    return setName ? `${topic.id}:${setName}` : topic.id;
+  }, [topic.id, setName]);
+
   useEffect(() => {
     checkSavedSession();
     fetchTopicStats(true);
-  }, [topic.id, mode]);
+  }, [topic.id, mode, setName]);
 
   const checkSavedSession = async () => {
     setLoading(true);
     try {
       const profile = await db.profiles.get(user.id);
       const activeSessions = profile.metadata?.active_sessions || {};
-      const saved = activeSessions[topic.id];
+      const saved = activeSessions[sessionKey];
       
       if (saved && !showSummary) {
         setSavedSession(saved);
         setShowResumePrompt(true);
+        setLoading(false);
       } else {
         fetchQuestions();
       }
@@ -100,7 +105,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
 
   const restartSession = () => {
     setShowResumePrompt(false);
-    db.profiles.clearPartialSession(user.id, topic.id).catch(console.error);
+    db.profiles.clearPartialSession(user.id, sessionKey).catch(console.error);
     fetchQuestions();
   };
 
@@ -113,13 +118,14 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   }, [showSummary, loading, showResumePrompt]);
 
   const saveProgress = async (newIndex: number, newResults: any[], elapsed: number) => {
-    if (showSummary) return;
+    if (showSummary || questions.length === 0) return;
     try {
-      await db.profiles.savePartialSession(user.id, topic.id, {
+      await db.profiles.savePartialSession(user.id, sessionKey, {
         current_index: newIndex,
         results: newResults,
         seconds_elapsed: elapsed,
-        question_ids: questions.map(q => q.id)
+        question_ids: questions.map(q => q.id),
+        set_name: setName || 'Umum'
       });
     } catch (err) {
       console.error('Save progress error:', err);
@@ -165,7 +171,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
       setStartTime(Date.now());
       setSecondsElapsed(0);
       // Clear any partial session since we are explicitly starting fresh via fetchQuestions
-      db.profiles.clearPartialSession(user.id, topic.id).catch(console.error);
+      db.profiles.clearPartialSession(user.id, sessionKey).catch(console.error);
     } catch (err) {
       console.error('Fetch error:', err);
     } finally {
@@ -191,7 +197,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
       setStartTime(Date.now());
       saveProgress(nextIndex, results, secondsElapsed);
     } else {
-      db.profiles.clearPartialSession(user.id, topic.id).catch(console.error);
+      db.profiles.clearPartialSession(user.id, sessionKey).catch(console.error);
       fetchTopicStats();
       
       // Record quiz result
