@@ -148,6 +148,32 @@ export const db = {
     }
   },
 
+  settings: {
+    async get(key: string) {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('key', key)
+        .maybeSingle();
+      
+      if (error) {
+        console.warn('Settings table potentially missing, falling back to null', error);
+        return null;
+      }
+      return data;
+    },
+    async set(key: string, value: string) {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .upsert([{ key, value, updated_at: new Date().toISOString() }], { onConflict: 'key' })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    }
+  },
+
   admin: {
     async getGlobalStats() {
       // 1. Total Students

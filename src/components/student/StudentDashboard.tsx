@@ -34,6 +34,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { StatCard } from '../ui/StatCard';
 import { STRINGS } from '../../lib/strings';
+import { AboutDeveloperCard, OurMissionCard } from '../AboutInfo';
 
 import { 
   LineChart, 
@@ -685,6 +686,11 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
           <h3 className="text-3xl font-black text-ink tracking-tight">{user.name}</h3>
           <p className="text-ink-muted font-bold mt-1">{user.email}</p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 pt-4">
+        <AboutDeveloperCard />
+        <OurMissionCard />
       </div>
 
       <div className="space-y-4 pt-6">

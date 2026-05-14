@@ -20,6 +20,7 @@ import { cn } from '../../lib/utils';
 import { User } from '../../types';
 import ContentManager from './ContentManager';
 import StudentManager from './StudentManager';
+import AppInfoSettings from './AppInfoSettings';
 import { AdminLayout } from '../../layouts/AdminLayout';
 import { Card } from '../ui/Card';
 import { StatCard } from '../ui/StatCard';
@@ -159,21 +160,20 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         {activeTab === 'content' && <ContentManager user={user} />}
         {activeTab === 'students' && <StudentManager />}
         {activeTab === 'settings' && (
-          <div className="max-w-2xl mx-auto py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Card className="p-12 text-center flex flex-col items-center">
-               <div className="w-20 h-20 bg-slate-50 rounded-[2rem] flex items-center justify-center mb-8 shadow-soft">
-                 <Settings className="w-10 h-10 text-primary animate-spin-slow" />
+          <div className="max-w-4xl mx-auto py-8 space-y-8">
+            <AppInfoSettings />
+            
+            <Card className="p-8 text-center flex flex-col items-center bg-slate-50/50 border-2 border-slate-50">
+               <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center mb-6 shadow-soft">
+                 <Settings className="w-8 h-8 text-primary animate-spin-slow" />
                </div>
-               <h3 className="text-3xl font-black text-ink">Tetapan Platform</h3>
-               <p className="text-ink-muted mt-4 font-bold leading-relaxed">
-                 Panel konfigurasi sistem sedang dalam pembinaan untuk peringkat seterusnya. Anda akan dapat mengurus parameter AI dan tetapan bahasa di sini.
-               </p>
-               <div className="mt-10 grid grid-cols-2 gap-4 w-full">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+               <h3 className="text-2xl font-black text-ink">Informasi Sistem</h3>
+               <div className="mt-8 grid grid-cols-2 gap-4 w-full max-w-md mx-auto">
+                  <div className="p-4 bg-white rounded-2xl border border-slate-100 text-left">
                     <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Versi Sistem</p>
                     <p className="text-sm font-black text-ink">v2.0.4-beta</p>
                   </div>
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                  <div className="p-4 bg-white rounded-2xl border border-slate-100 text-left">
                     <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Status Server</p>
                     <p className="text-sm font-black text-ink">Stabil</p>
                   </div>
