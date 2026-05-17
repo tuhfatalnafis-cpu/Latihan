@@ -14,11 +14,13 @@ import {
 } from 'lucide-react';
 import { db } from '../../lib/db';
 import { Subject, Syllabus, Topic } from '../../lib/supabase';
+import { SUBJECT_PRESETS, SubjectFieldSchema, DEFAULT_SCHEMA } from '../../lib/subjectPresets';
 import { User } from '../../types';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import TopicDetail from './TopicDetail';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import SubjectSchemaEditor from './SubjectSchemaEditor';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
 import { Card } from '../ui/Card';
@@ -54,6 +56,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemGrade, setNewItemGrade] = useState('');
+  const [newItemSchema, setNewItemSchema] = useState<SubjectFieldSchema>(DEFAULT_SCHEMA);
 
   // Confirmation state
   const [confirmState, setConfirmState] = useState<{
@@ -99,7 +102,12 @@ export default function ContentManager({ user }: ContentManagerProps) {
     if (!newItemName.trim()) return;
     try {
       if (view.type === 'subjects' || view.type === 'grade_subjects') {
-        await db.subjects.create({ name: newItemName, grade: newItemGrade, created_by: user.id });
+        await db.subjects.create({ 
+          name: newItemName, 
+          grade: newItemGrade, 
+          field_schema: newItemSchema,
+          created_by: user.id 
+        });
       } else if (view.type === 'syllabi') {
         await db.syllabi.create({ name: newItemName, subject_id: view.subject.id, created_by: user.id });
       } else if (view.type === 'topics') {
@@ -115,14 +123,19 @@ export default function ContentManager({ user }: ContentManagerProps) {
     }
   };
 
-  const [editingItem, setEditingItem] = useState<{ id: string, name: string, grade?: string } | null>(null);
+  const [editingItem, setEditingItem] = useState<{ id: string, name: string, grade?: string, field_schema?: SubjectFieldSchema } | null>(null);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem || !editingItem.name.trim()) return;
     try {
-      if (view.type === 'subjects' || view.type === 'grade_subjects') await db.subjects.update(editingItem.id, { name: editingItem.name, grade: editingItem.grade });
-      else if (view.type === 'syllabi') await db.syllabi.update(editingItem.id, { name: editingItem.name });
+      if (view.type === 'subjects' || view.type === 'grade_subjects') {
+        await db.subjects.update(editingItem.id, { 
+          name: editingItem.name, 
+          grade: editingItem.grade,
+          field_schema: editingItem.field_schema
+        });
+      } else if (view.type === 'syllabi') await db.syllabi.update(editingItem.id, { name: editingItem.name });
       setEditingItem(null);
       fetchData();
       toast.success('Berjaya dikemaskini');
@@ -392,7 +405,25 @@ export default function ContentManager({ user }: ContentManagerProps) {
                          className="w-full px-4 py-2 border-2 border-primary/20 rounded-xl outline-none focus:border-primary font-bold bg-slate-50"
                        />
                      </div>
-                     <Button type="submit" size="sm" className="w-full py-3"><CheckCircle2 className="w-5 h-5 mr-2" /> Simpan</Button>
+                     
+                     <SubjectSchemaEditor 
+                       schema={editingItem.field_schema || DEFAULT_SCHEMA} 
+                       onChange={(schema) => setEditingItem({ ...editingItem, field_schema: schema })} 
+                     />
+
+                     <div className="flex gap-2 mt-4">
+                       <Button 
+                         type="button" 
+                         variant="ghost" 
+                         className="flex-1"
+                         onClick={() => setEditingItem(null)}
+                       >
+                         Batal
+                       </Button>
+                       <Button type="submit" className="flex-1">
+                         <CheckCircle2 className="w-5 h-5 mr-2" /> Simpan
+                       </Button>
+                     </div>
                   </form>
                 ) : (
                   <>
@@ -404,7 +435,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
                 <div className="mt-auto pt-6 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                   <div className="flex gap-1">
                     <button 
-                      onClick={(e) => { e.stopPropagation(); setEditingItem({ id: s.id, name: s.name, grade: s.grade }); }}
+                      onClick={(e) => { e.stopPropagation(); setEditingItem({ id: s.id, name: s.name, grade: s.grade, field_schema: s.field_schema }); }}
                       className="p-2 text-ink-muted hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -533,7 +564,7 @@ export default function ContentManager({ user }: ContentManagerProps) {
               className="bg-white w-full max-w-md rounded-[2.5rem] p-10 shadow-soft-2xl border-2 border-slate-50"
             >
               <h2 className="text-3xl font-black text-ink mb-6">Tambah {view.type === 'subjects' ? 'Subjek' : view.type === 'syllabi' ? 'Silibus' : 'Topik'}</h2>
-              <div className="space-y-4 mb-10">
+              <div className="space-y-4 mb-10 overflow-y-auto max-h-[60vh] px-1">
                 <div>
                   <label className="block text-xs font-black text-ink-muted uppercase tracking-widest mb-3 ml-1">Nama {view.type === 'subjects' ? 'Subjek' : view.type === 'syllabi' ? 'Silibus' : 'Topik'}</label>
                   <input 
@@ -546,16 +577,26 @@ export default function ContentManager({ user }: ContentManagerProps) {
                   />
                 </div>
                 {view.type === 'subjects' && (
-                  <div>
-                    <label className="block text-xs font-black text-ink-muted uppercase tracking-widest mb-3 ml-1">Gred / Tahun (Pilihan)</label>
-                    <input 
-                      type="text" 
-                      value={newItemGrade}
-                      onChange={(e) => setNewItemGrade(e.target.value)}
-                      placeholder="Contoh: Tahun 1"
-                      className="w-full px-6 py-5 bg-bg-cream/50 border-2 border-slate-100 rounded-[1.5rem] focus:border-primary focus:bg-white outline-none transition-all font-bold text-lg"
-                    />
-                  </div>
+                  <>
+                    <div>
+                      <label className="block text-xs font-black text-ink-muted uppercase tracking-widest mb-3 ml-1">Gred / Tahun (Pilihan)</label>
+                      <input 
+                        type="text" 
+                        value={newItemGrade}
+                        onChange={(e) => setNewItemGrade(e.target.value)}
+                        placeholder="Contoh: Tahun 1"
+                        className="w-full px-6 py-5 bg-bg-cream/50 border-2 border-slate-100 rounded-[1.5rem] focus:border-primary focus:bg-white outline-none transition-all font-bold text-lg"
+                      />
+                    </div>
+                    
+                    <div className="pt-4 border-t border-slate-100">
+                      <p className="text-xs font-black text-ink-muted uppercase tracking-widest mb-4 ml-1">Konfigurasi Struktur</p>
+                      <SubjectSchemaEditor 
+                        schema={newItemSchema}
+                        onChange={setNewItemSchema}
+                      />
+                    </div>
+                  </>
                 )}
               </div>
               <div className="flex gap-4">

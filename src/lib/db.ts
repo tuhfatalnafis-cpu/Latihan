@@ -274,26 +274,12 @@ export const db = {
       }) as Subject[];
     },
     async create(subject: Partial<Subject>) {
-      const { grade, ...rest } = subject;
+      const { grade, field_schema, ...rest } = subject;
       const finalName = grade ? `[${grade}] ${rest.name}` : rest.name;
       
-      // Try with grade column first
-      try {
-        const { data, error } = await supabase
-          .from('subjects')
-          .insert([{ ...rest, name: finalName, grade }])
-          .select()
-          .single();
-        
-        if (!error) return data as Subject;
-      } catch (err) {
-        // Ignore and fallback
-      }
-
-      // Fallback: Insert without grade column
       const { data, error } = await supabase
         .from('subjects')
-        .insert([{ ...rest, name: finalName }])
+        .insert([{ ...rest, name: finalName, grade, field_schema }])
         .select()
         .single();
       
@@ -312,21 +298,9 @@ export const db = {
         
         const finalName = newGrade ? `[${newGrade}] ${newName}` : newName;
         
-        // Try with grade column
-        try {
-          const { data, error } = await supabase
-            .from('subjects')
-            .update({ ...rest, name: finalName, grade: newGrade })
-            .eq('id', id)
-            .select()
-            .single();
-          if (!error) return data as Subject;
-        } catch (err) {}
-
-        // Fallback
         const { data, error } = await supabase
           .from('subjects')
-          .update({ ...rest, name: finalName })
+          .update({ ...rest, name: finalName, grade: newGrade })
           .eq('id', id)
           .select()
           .single();
@@ -392,6 +366,16 @@ export const db = {
   },
 
   topics: {
+    async getSubjectSchema(topicId: string) {
+      const { data, error } = await supabase
+        .from('topics')
+        .select('syllabi(subjects(field_schema))')
+        .eq('id', topicId)
+        .single();
+      
+      if (error) throw error;
+      return (data as any).syllabi?.subjects?.field_schema;
+    },
     async listForSyllabus(syllabusId: string) {
       const { data, error } = await supabase
         .from('topics')
@@ -516,29 +500,57 @@ export const db = {
         .eq('topic_id', topicId)
         .order('created_at');
       if (error) throw error;
-      return data;
+      return data.map(v => ({
+        ...v,
+        term: v.term || v.arabic, // Fallback for old data
+        meaning: v.meaning || v.meaning_ms // Fallback for old data
+      }));
     },
     async create(vocab: any) {
+      // Ensure term/meaning are set even if components send arabic/meaning_ms
+      const payload = {
+        ...vocab,
+        term: vocab.term || vocab.arabic,
+        meaning: vocab.meaning || vocab.meaning_ms
+      };
+      delete payload.arabic;
+      delete payload.meaning_ms;
+
       const { data, error } = await supabase
         .from('vocabulary')
-        .insert([vocab])
+        .insert([payload])
         .select()
         .single();
       if (error) throw error;
       return data;
     },
     async batchCreate(vocabs: any[]) {
+      const formatted = vocabs.map(v => {
+        const payload = {
+          ...v,
+          term: v.term || v.arabic,
+          meaning: v.meaning || v.meaning_ms
+        };
+        delete payload.arabic;
+        delete payload.meaning_ms;
+        return payload;
+      });
+
       const { data, error } = await supabase
         .from('vocabulary')
-        .insert(vocabs)
+        .insert(formatted)
         .select();
       if (error) throw error;
       return data;
     },
     async update(id: string, updates: any) {
+      const payload = { ...updates };
+      if (payload.arabic) { payload.term = payload.arabic; delete payload.arabic; }
+      if (payload.meaning_ms) { payload.meaning = payload.meaning_ms; delete payload.meaning_ms; }
+
       const { data, error } = await supabase
         .from('vocabulary')
-        .update(updates)
+        .update(payload)
         .eq('id', id)
         .select()
         .single();

@@ -2,5 +2,5 @@
   "name": "Cepat Belajar",
   "description": "An intelligent online study platform (Cepat Belajar) featuring AI-powered question generation and role-based dashboards.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

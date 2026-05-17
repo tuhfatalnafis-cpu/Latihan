@@ -27,6 +27,8 @@ import { Question, Topic } from '../../lib/supabase';
 import { User } from '../../types';
 import { cn, fixJawiSpelling } from '../../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { useSubjectSchema } from '../../hooks/useSubjectSchema';
+import { getTermLabel, getMeaningLabel, isRTL, getTermFontClass } from '../../lib/subjectHelpers';
 import VocabImporter from './VocabImporter';
 import QuestionGenerator from './QuestionGenerator';
 import { supabase } from '../../lib/supabase';
@@ -57,6 +59,7 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
   const [editName, setEditName] = useState(topic.name);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSets, setExpandedSets] = useState<string[]>([]);
+  const { schema } = useSubjectSchema(topic.id);
   
   // Confirmation state
   const [confirmState, setConfirmState] = useState<{
@@ -102,13 +105,13 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
           // Fix vocabulary
           const updatedVocabs = vocabulary.map(v => ({
             ...v,
-            arabic_fixed: fixJawiSpelling(v.arabic),
+            term_fixed: fixJawiSpelling(v.term),
           }));
 
           const vPromises = updatedVocabs
-            .filter(v => v.arabic_fixed !== v.arabic)
+            .filter(v => v.term_fixed !== v.term)
             .map(v => supabase.from('vocabulary').update({ 
-               arabic: v.arabic_fixed 
+               term: v.term_fixed 
             }).eq('id', v.id));
 
           await Promise.all([...qPromises, ...vPromises]);
@@ -146,20 +149,22 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
   };
 
   const handleAddManual = async () => {
-    const arabic = window.prompt("Masukkan perkataan Arab:");
-    const meaning = window.prompt("Masukkan maksud dalam Bahasa Melayu:");
-    if (!arabic || !meaning) return;
+    const termLabel = getTermLabel(schema);
+    const meaningLabel = getMeaningLabel(schema);
+    
+    const term = window.prompt(`Masukkan ${termLabel}:`);
+    const meaning = window.prompt(`Masukkan ${meaningLabel}:`);
+    if (!term || !meaning) return;
 
     try {
       await db.vocabulary.create({
         topic_id: topic.id,
-        arabic,
-        meaning_ms: meaning,
-        transliteration: '',
-        image_keyword: ''
+        term,
+        meaning,
+        extra_fields: {}
       });
       fetchData();
-      toast.success('Berjaya menambah perkataan!');
+      toast.success('Berjaya ditambah!');
     } catch (err) {
       toast.error('Gagal menambah.');
     }
@@ -318,14 +323,16 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
         </div>
         
         <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-          <Button 
-            variant="ghost"
-            onClick={handleNormalizeJawi}
-            className="rounded-[1.5rem] h-14 bg-slate-50 text-ink-muted hover:text-primary"
-            title="Betulkan ejaan Jawi"
-          >
-            <Sparkles className="w-5 h-5 mr-2" /> Normalize Jawi
-          </Button>
+          {schema.term_font === 'arabic' && (
+            <Button 
+              variant="ghost"
+              onClick={handleNormalizeJawi}
+              className="rounded-[1.5rem] h-14 bg-slate-50 text-ink-muted hover:text-primary"
+              title="Betulkan ejaan Jawi"
+            >
+              <Sparkles className="w-5 h-5 mr-2" /> Normalize Jawi
+            </Button>
+          )}
           <Button 
             onClick={() => setShowImporter(true)}
             className="rounded-[1.5rem] bg-primary hover:bg-primary/90 shadow-soft-lg group h-14"
@@ -389,7 +396,7 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                 <div className="flex-1 relative w-full">
                   <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted" />
                   <input 
-                    placeholder="Cari perkataan dalam Arab atau Melayu..."
+                    placeholder={`Cari dalam ${getTermLabel(schema)} atau ${getMeaningLabel(schema)}...`}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-14 pr-8 py-5 bg-white border-2 border-slate-50 rounded-[1.5rem] font-bold text-ink outline-none focus:border-primary shadow-soft focus:shadow-soft-xl transition-all"
@@ -409,33 +416,39 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                      <Database className="w-12 h-12 text-ink-muted" />
                    </div>
                    <h3 className="text-3xl font-black text-ink">Perpustakaan Kosong</h3>
-                   <p className="text-ink-muted max-w-sm mt-3 font-bold">Muat naik fail CSV atau tambah manual perkataan Arab anda untuk mula membina modul pembelajaran.</p>
+                   <p className="text-ink-muted max-w-sm mt-3 font-bold">Muat naik fail CSV atau tambah manual data anda untuk mula membina modul pembelajaran.</p>
                 </Card>
               ) : (
                 <Card className="p-0 overflow-hidden border-2 border-slate-50">
                   <div className="grid grid-cols-12 bg-slate-50/50 px-8 py-5 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-ink-muted">
-                    <div className="col-span-4">Kosa Kata Arab</div>
+                    <div className="col-span-4">{getTermLabel(schema)}</div>
                     <div className="col-span-1 text-center">Ikon</div>
                     <div className="col-span-1"></div>
-                    <div className="col-span-4">Terjemahan Melayu</div>
+                    <div className="col-span-4">{getMeaningLabel(schema)}</div>
                     <div className="col-span-2 text-right">Tindakan</div>
                   </div>
                   <div className="divide-y divide-slate-50 max-h-[700px] overflow-y-auto custom-scrollbar">
                     {vocabulary
                       .filter(v => 
-                        v.arabic.includes(searchQuery) || 
-                        v.meaning_ms.toLowerCase().includes(searchQuery.toLowerCase())
+                        v.term.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        v.meaning.toLowerCase().includes(searchQuery.toLowerCase())
                       )
                       .map((v) => (
                         <div key={v.id} className="grid grid-cols-12 px-8 py-6 items-center hover:bg-bg-cream/20 transition-all group">
-                          <div className="col-span-4">
-                            <p className="text-arabic text-3xl text-ink font-bold leading-none mb-2">{v.arabic}</p>
-                            {v.transliteration && <p className="text-[10px] text-primary font-black uppercase tracking-widest bg-primary/5 px-2 py-0.5 rounded w-fit">{v.transliteration}</p>}
+                          <div className={cn("col-span-4", isRTL(schema) && "text-right")} dir={isRTL(schema) ? "rtl" : "ltr"}>
+                            <p className={cn("text-ink font-bold leading-none mb-2", getTermFontClass(schema), isRTL(schema) ? "text-4xl" : "text-xl")}>
+                              {v.term}
+                            </p>
+                            {schema.extra_fields?.map(field => v.extra_fields?.[field.key] && (
+                              <p key={field.key} className="text-[10px] text-primary font-black uppercase tracking-widest bg-primary/5 px-2 py-0.5 rounded w-fit inline-block mr-2">
+                                {field.label}: {v.extra_fields[field.key]}
+                              </p>
+                            ))}
                           </div>
                           <div className="col-span-1 flex justify-center">
-                            {v.image_keyword ? (
+                            {(v.metadata?.image_keyword || v.image_keyword) ? (
                               <div className="w-12 h-12 bg-white border-2 border-slate-50 rounded-2xl p-2 flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
-                                <img src={`https://openmoji.org/data/color/svg/${v.image_keyword}.svg`} alt="" className="w-full h-full object-contain" />
+                                <img src={`https://openmoji.org/data/color/svg/${v.metadata?.image_keyword || v.image_keyword}.svg`} alt="" className="w-full h-full object-contain" />
                               </div>
                             ) : (
                               <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-100 opacity-40">
@@ -447,11 +460,11 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                              <ArrowRight className="w-5 h-5 text-slate-200" />
                           </div>
                           <div className="col-span-4">
-                            <p className="text-lg font-black text-ink">{v.meaning_ms}</p>
+                            <p className="text-lg font-black text-ink">{v.meaning}</p>
                           </div>
                           <div className="col-span-2 text-right">
                              <button 
-                                onClick={() => handleDeleteVocab(v.id, v.arabic)}
+                                onClick={() => handleDeleteVocab(v.id, v.term)}
                                 className="p-4 text-ink-muted hover:text-rose-500 hover:bg-rose-50 transition-all rounded-[1.5rem] opacity-0 group-hover:opacity-100"
                               >
                                 <Trash2 className="w-5 h-5" />
@@ -554,19 +567,23 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                                       <tr key={q.id} className="group/row">
                                         <td className="py-5 font-black text-slate-200">{(idx + 1).toString().padStart(2, '0')}</td>
                                         <td className="py-5 max-w-md pr-10">
-                                          <p className={cn("font-bold text-ink", q.metadata?.direction === 'ar_to_ms' ? "text-arabic text-3xl leading-relaxed" : "text-base")}>
-                                            {q.prompt}
-                                          </p>
+                                          <div className={cn(isRTL(schema) && q.metadata?.direction === 'ar_to_ms' && "text-right")} dir={isRTL(schema) && q.metadata?.direction === 'ar_to_ms' ? "rtl" : "ltr"}>
+                                            <p className={cn("font-bold text-ink", q.metadata?.direction === 'ar_to_ms' ? cn(getTermFontClass(schema), isRTL(schema) ? "text-3xl leading-relaxed" : "text-base") : "text-base")}>
+                                              {q.prompt}
+                                            </p>
+                                          </div>
                                           {q.metadata?.direction === 'ar_to_ms' && q.transliteration && (
                                             <p className="text-[10px] font-black text-primary uppercase tracking-widest mt-1 opacity-50">{q.transliteration}</p>
                                           )}
                                         </td>
                                         <td className="py-5">
-                                          <div className={cn(
-                                            "font-black px-4 py-2 rounded-xl inline-block",
-                                            q.metadata?.direction === 'ms_to_ar' ? "text-arabic text-3xl text-emerald-700 bg-emerald-50" : "text-base text-primary bg-primary/5"
-                                          )}>
-                                            {q.answer}
+                                          <div className={cn(isRTL(schema) && q.metadata?.direction === 'ms_to_ar' && "text-right")} dir={isRTL(schema) && q.metadata?.direction === 'ms_to_ar' ? "rtl" : "ltr"}>
+                                            <div className={cn(
+                                              "font-black px-4 py-2 rounded-xl inline-block",
+                                              q.metadata?.direction === 'ms_to_ar' ? cn(getTermFontClass(schema), "text-emerald-700 bg-emerald-50", isRTL(schema) ? "text-3xl" : "text-base") : "text-base text-primary bg-primary/5"
+                                            )}>
+                                              {q.answer}
+                                            </div>
                                           </div>
                                         </td>
                                         <td className="py-5 text-right">
@@ -598,6 +615,7 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
       {showImporter && (
         <VocabImporter 
           topicId={topic.id}
+          schema={schema}
           onClose={() => setShowImporter(false)}
           onComplete={fetchData}
         />
@@ -609,11 +627,12 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
           userId={user.id}
           library={vocabulary.map(v => ({
             id: v.id,
-            arabic: v.arabic,
-            meaning_ms: v.meaning_ms,
-            transliteration: v.transliteration,
-            image_keyword: v.image_keyword
+            term: v.term,
+            meaning: v.meaning,
+            extra_fields: v.extra_fields || {},
+            metadata: v.metadata || {}
           }))}
+          schema={schema}
           onClose={() => setShowGenerator(false)}
           onComplete={fetchData}
         />

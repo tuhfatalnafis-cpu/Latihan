@@ -1,16 +1,19 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const genAI = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || "",
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 async function startServer() {
   const app = express();
@@ -36,20 +39,21 @@ async function startServer() {
 
       const promptText = `Generate ${Math.min(count || 20, 25)} MCQs based on: "${prompt || 'General knowledge'}"`;
 
-      const result = await genAI.models.generateContent({
+      const response = await genAI.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [{
+        contents: {
           parts: [...fileParts, { text: promptText }]
-        }],
+        },
         config: {
           systemInstruction: `
             You are an educational assessment expert specializing in language and academic subjects. 
             Your goal is to generate a JSON array of high-quality Multiple Choice Questions (MCQs).
             
             GUIDELINES:
-            - Questions can focus on vocabulary, grammar, or reading comprehension.
+            - Questions should be clear, concise, and pedagogically sound.
             - Each question must have exactly 3 distractors (wrong but plausible answers).
-            - IMPORTANT: Use specific Jawi characters where appropriate: چ (Ca), ڠ (Nga), ڤ (Pa), ݢ (Ga), ۏ (Va), ڽ (Nya).
+            - If the language involved is Jawi/Malay, use specific Jawi characters where appropriate: چ (Ca), ڠ (Nga), ڤ (Pa), ݢ (Ga), ۏ (Va), ڽ (Nya).
+            - If generating language content (e.g. Arabic, English), ensure grammatical accuracy.
             - Return ONLY a clean JSON array.
           `,
           temperature: 0.7,
@@ -77,7 +81,8 @@ async function startServer() {
         }
       });
 
-      const responseText = result.text;
+      const responseText = response.text;
+      if (!responseText) throw new Error("No response text from AI");
       res.json(JSON.parse(responseText));
     } catch (error: any) {
       console.error("AI Generation Error:", error);
@@ -95,11 +100,11 @@ async function startServer() {
 
       const promptText = `Soalan: '${question.prompt}'. Jawapan betul: '${question.answer}'. Calon distraktor: ${candidates.join(', ')}.`;
 
-      const result = await genAI.models.generateContent({
+      const response = await genAI.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: [{ parts: [{ text: promptText }] }],
+        contents: { parts: [{ text: promptText }] },
         config: {
-          systemInstruction: "Anda adalah pakar bahasa Arab dan Jawi. Pilih 3 distraktor yang paling dekat secara makna tetapi tetap salah. Kembalikan JSON as per schema.",
+          systemInstruction: "Anda adalah pakar dalam penilaian pendidikan. Pilih 3 distraktor yang paling sukar atau paling dekat secara makna tetapi tetap salah berdasarkan konteks soalan. Jika berkaitan Jawi, pastikan ejaan betul.",
           temperature: 0.5,
           responseMimeType: "application/json",
           responseSchema: {
@@ -117,7 +122,9 @@ async function startServer() {
         }
       });
 
-      res.json(JSON.parse(result.text));
+      const responseText = response.text;
+      if (!responseText) throw new Error("No response text from AI");
+      res.json(JSON.parse(responseText));
     } catch (error: any) {
       console.error("Distractor Enhancement Error:", error);
       res.status(500).json({ error: error.message || "Failed to enhance distractors" });
@@ -132,6 +139,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    // Production: serve static files from dist
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {

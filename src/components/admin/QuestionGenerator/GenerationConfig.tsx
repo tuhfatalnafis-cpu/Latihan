@@ -3,18 +3,20 @@ import { motion } from 'motion/react';
 import { BrainCircuit, ChevronRight, AlertCircle, Sparkles, Database, Upload, FileText, ImageIcon, X, Loader2, Plus } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { GenConfig } from '../../../lib/questionGenerator';
+import { SubjectFieldSchema } from '../../../lib/subjectPresets';
 import { toast } from 'sonner';
 
 interface Step1Props {
   libSize: number;
+  schema: SubjectFieldSchema;
   onNext: (config: { name: string; prompt?: string, files?: { data: string; mimeType: string }[] } & GenConfig & { strategy: 'random' | 'ai' | 'pure_ai' }) => void;
   onCancel: () => void;
 }
 
-export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Props) {
+export default function GenerationConfig({ libSize, schema, onNext, onCancel }: Step1Props) {
   const [name, setName] = useState('');
   const [count, setCount] = useState(libSize > 0 ? Math.min(20, libSize) : 20);
-  const [direction, setDirection] = useState<'ar_to_ms' | 'ms_to_ar' | 'both' | 'general'>('both');
+  const [direction, setDirection] = useState<'term_to_meaning' | 'meaning_to_term' | 'both' | 'general'>('both');
   const [strategy, setStrategy] = useState<'random' | 'ai' | 'pure_ai'>(libSize > 0 ? 'random' : 'pure_ai');
   const [prompt, setPrompt] = useState('');
   const [files, setFiles] = useState<{ data: string; mimeType: string, name: string }[]>([]);
@@ -127,11 +129,11 @@ export default function GenerationConfig({ libSize, onNext, onCancel }: Step1Pro
         {/* Direction */}
         <div>
           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Arah atau Jenis Soalan</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[
-              { id: 'ar_to_ms', label: 'Arab → Melayu', hidden: strategy === 'random' && libSize < 1 },
-              { id: 'ms_to_ar', label: 'Melayu → Arab', hidden: strategy === 'random' && libSize < 1 },
-              { id: 'both', label: 'Kombinasi Arab-Melayu', hidden: strategy === 'random' },
+              { id: 'term_to_meaning', label: `${schema.term_label} → ${schema.meaning_label}`, hidden: strategy === 'random' && libSize < 1 },
+              { id: 'meaning_to_term', label: `${schema.meaning_label} → ${schema.term_label}`, hidden: strategy === 'random' && libSize < 1 },
+              { id: 'both', label: `Kombinasi Kedua-dua Arah`, hidden: strategy === 'random' },
               { id: 'general', label: 'Umum / Pemahaman (AI)', hidden: strategy !== 'pure_ai' }
             ].filter(d => !d.hidden).map(dir => (
               <button

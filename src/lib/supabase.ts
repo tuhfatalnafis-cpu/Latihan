@@ -60,7 +60,18 @@ export interface Subject {
   name: string;
   description?: string;
   grade?: string;
+  field_schema?: any; // SubjectFieldSchema
   created_by: string;
+  created_at: string;
+}
+
+export interface Vocabulary {
+  id: string;
+  topic_id: string;
+  term: string;
+  meaning: string;
+  extra_fields?: Record<string, any>;
+  metadata?: Record<string, any>;
   created_at: string;
 }
 
@@ -95,7 +106,7 @@ export interface Question {
   metadata: {
     image_url?: string;
     image_keyword?: string;
-    direction?: 'ar_to_ms' | 'ms_to_ar' | 'general';
+    direction?: 'term_to_meaning' | 'meaning_to_term' | 'ar_to_ms' | 'ms_to_ar' | 'general';
     pairs?: { left: string; right: string }[];
     [key: string]: any;
   };

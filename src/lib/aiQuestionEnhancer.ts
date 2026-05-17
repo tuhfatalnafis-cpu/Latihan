@@ -7,7 +7,7 @@ export async function enhanceDistractors(
   try {
     // Pick a pool of candidates from the library (same direction)
     const directionPool = library
-      .map(v => (question.direction === 'ar_to_ms' ? v.meaning_ms : v.arabic))
+      .map(v => (question.direction === 'term_to_meaning' || question.direction === 'ar_to_ms' ? v.meaning : v.term))
       .filter(val => val !== question.answer);
     
     // Shuffle and pick 15

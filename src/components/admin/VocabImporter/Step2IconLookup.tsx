@@ -3,14 +3,17 @@ import { motion } from 'motion/react';
 import { ChevronRight, ChevronLeft, Image, Search, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { VocabRow } from '../../../lib/questionGenerator';
 import { cn } from '../../../lib/utils';
+import { SubjectFieldSchema } from '../../../lib/subjectPresets';
+import { getTermFontClass, isRTL } from '../../../lib/subjectHelpers';
 
 interface Step2Props {
   data: Partial<VocabRow>[];
+  schema: SubjectFieldSchema;
   onNext: (data: Partial<VocabRow>[]) => void;
   onBack: () => void;
 }
 
-export default function Step2IconLookup({ data, onNext, onBack }: Step2Props) {
+export default function Step2IconLookup({ data, schema, onNext, onBack }: Step2Props) {
   const [workingData, setWorkingData] = useState(data);
   const [isResolving, setIsResolving] = useState(false);
 
@@ -21,7 +24,7 @@ export default function Step2IconLookup({ data, onNext, onBack }: Step2Props) {
     
     const updated = workingData.map(item => ({
       ...item,
-      image_keyword: item.image_keyword || item.meaning_ms?.toLowerCase().split(' ')[0] || ''
+      image_keyword: item.image_keyword || item.meaning?.toLowerCase().split(' ')[0] || ''
     }));
     
     setWorkingData(updated);
@@ -42,7 +45,7 @@ export default function Step2IconLookup({ data, onNext, onBack }: Step2Props) {
           </div>
           <div>
             <p className="font-extrabold text-amber-900 leading-tight text-sm">Jana Ikon Automatik</p>
-            <p className="text-amber-700/70 text-[10px] font-bold uppercase tracking-widest mt-0.5">Berdasarkan maksud perkataan</p>
+            <p className="text-amber-700/70 text-[10px] font-bold uppercase tracking-widest mt-0.5">Berdasarkan maksud</p>
           </div>
         </div>
         <p className="text-xs text-amber-800/80 font-medium leading-relaxed mb-6">
@@ -61,16 +64,16 @@ export default function Step2IconLookup({ data, onNext, onBack }: Step2Props) {
       <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-2xl">
         <div className="grid grid-cols-2 gap-2 p-2">
           {workingData.slice(0, 10).map((row, i) => (
-            <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-slate-100 shadow-sm">
+            <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl overflow-hidden">
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-slate-100 shadow-sm shrink-0">
                 {row.image_keyword ? (
                   <img src={`https://openmoji.org/data/color/svg/${row.image_keyword}.svg`} alt="" className="w-6 h-6 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
                 ) : (
                   <Image className="w-4 h-4 text-slate-200" />
                 )}
               </div>
-              <div className="truncate">
-                <p className="text-arabic text-sm leading-none">{row.arabic}</p>
+              <div className="truncate flex-1" dir={isRTL(schema) ? "rtl" : "ltr"}>
+                <p className={cn("text-ink leading-none truncate", getTermFontClass(schema), isRTL(schema) ? "text-lg" : "text-sm font-bold")}>{row.term}</p>
                 <p className="text-[9px] font-bold text-slate-400 truncate uppercase mt-0.5">{row.image_keyword || 'Tiada'}</p>
               </div>
             </div>

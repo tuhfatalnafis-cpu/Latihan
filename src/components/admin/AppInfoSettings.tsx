@@ -19,8 +19,8 @@ export default function AppInfoSettings() {
         const about = await db.settings.get('about_developer');
         const mission = await db.settings.get('our_mission');
         
-        setAboutDeveloper(about?.value || 'Kami adalah pasukan pembangun yang komited untuk merevolusi cara pembelajaran bahasa Arab melalui teknologi AI Pintar.');
-        setOurMission(mission?.value || 'Misi kami adalah untuk menjadikan pembelajaran bahasa Arab mudah, menyeronokkan, dan boleh diakses oleh semua pelajar dengan bantuan kecerdasan buatan.');
+        setAboutDeveloper(about?.value || 'Kami adalah pasukan pembangun yang komited untuk merevolusi cara pembelajaran melalui teknologi AI Pintar.');
+        setOurMission(mission?.value || 'Misi kami adalah untuk menjadikan pembelajaran mudah, menyeronokkan, dan boleh diakses oleh semua pelajar dengan bantuan kecerdasan buatan.');
       } catch (err) {
         console.error('Error loading settings:', err);
       } finally {

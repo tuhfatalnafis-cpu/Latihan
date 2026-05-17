@@ -12,7 +12,7 @@ export function AboutDeveloperCard() {
     async function load() {
       try {
         const settings = await db.settings.get('about_developer');
-        setContent(settings?.value || 'Kami adalah pasukan pembangun yang komited untuk merevolusi cara pembelajaran bahasa Arab melalui teknologi AI Pintar.');
+        setContent(settings?.value || 'Kami adalah pasukan pembangun yang komited untuk merevolusi cara pembelajaran melalui teknologi AI Pintar.');
       } catch (err) {
         console.error('Error loading about developer:', err);
       } finally {
@@ -49,7 +49,7 @@ export function OurMissionCard() {
     async function load() {
       try {
         const settings = await db.settings.get('our_mission');
-        setContent(settings?.value || 'Misi kami adalah untuk menjadikan pembelajaran bahasa Arab mudah, menyeronokkan, dan boleh diakses oleh semua pelajar dengan bantuan kecerdasan buatan.');
+        setContent(settings?.value || 'Misi kami adalah untuk menjadikan pembelajaran mudah, menyeronokkan, dan boleh diakses oleh semua pelajar dengan bantuan kecerdasan buatan.');
       } catch (err) {
         console.error('Error loading our mission:', err);
       } finally {

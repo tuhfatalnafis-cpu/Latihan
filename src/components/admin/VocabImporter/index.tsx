@@ -3,43 +3,44 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Upload, CheckCircle2, ChevronRight, Loader2, Database, BrainCircuit, Search, Image as ImageIcon } from 'lucide-react';
 import Step1Upload from './Step1Upload';
 import Step2IconLookup from './Step2IconLookup';
-import { VocabRow } from '../../../lib/questionGenerator';
+import { SubjectFieldSchema } from '../../../lib/subjectPresets';
 import { db } from '../../../lib/db';
 import { toast } from 'sonner';
 
 interface VocabImporterProps {
   topicId: string;
+  schema: SubjectFieldSchema;
   onClose: () => void;
   onComplete: () => void;
 }
 
-export default function VocabImporter({ topicId, onClose, onComplete }: VocabImporterProps) {
+export default function VocabImporter({ topicId, schema, onClose, onComplete }: VocabImporterProps) {
   const [step, setStep] = useState(1);
-  const [data, setData] = useState<Partial<VocabRow>[]>([]);
+  const [data, setData] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const handleStep1Complete = (csvData: Partial<VocabRow>[]) => {
+  const handleStep1Complete = (csvData: any[]) => {
     setData(csvData);
     setStep(2);
   };
 
-  const handleSave = async (finalData: Partial<VocabRow>[]) => {
+  const handleSave = async (finalData: any[]) => {
     setSaving(true);
     try {
       // Fetch existing vocab for this topic to check for duplicates
       const existingVocab = await db.vocabulary.listForTopic(topicId);
-      const existingEntries = new Set(existingVocab.map((v: any) => `${v.arabic}|${v.meaning_ms}`));
+      const existingEntries = new Set(existingVocab.map((v: any) => `${v.term}|${v.meaning}`));
 
       const vocabToInsert = finalData
         .filter(v => {
-          const key = `${v.arabic || ''}|${v.meaning_ms || ''}`;
+          const key = `${v.term || ''}|${v.meaning || ''}`;
           return !existingEntries.has(key);
         })
         .map(v => ({
           topic_id: topicId,
-          arabic: v.arabic || '',
-          meaning_ms: v.meaning_ms || '',
-          transliteration: v.transliteration || '',
+          term: v.term || '',
+          meaning: v.meaning || '',
+          extra_fields: v.extra_fields || {},
           image_keyword: v.image_keyword || '',
           metadata: { imported_at: new Date().toISOString() }
         }));
@@ -90,6 +91,7 @@ export default function VocabImporter({ topicId, onClose, onComplete }: VocabImp
                  exit={{ opacity: 0, x: -20 }}
                >
                  <Step1Upload 
+                   schema={schema}
                    onNext={handleStep1Complete} 
                    onCancel={onClose} 
                  />
@@ -103,6 +105,7 @@ export default function VocabImporter({ topicId, onClose, onComplete }: VocabImp
                >
                  <Step2IconLookup 
                    data={data} 
+                   schema={schema}
                    onNext={handleSave} 
                    onBack={() => setStep(1)} 
                  />

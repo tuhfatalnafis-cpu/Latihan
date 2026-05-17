@@ -19,6 +19,8 @@ import { sm2 } from '../../lib/srs';
 import { Question, Topic, Attempt, Progress } from '../../lib/supabase';
 import { User } from '../../types';
 import { cn } from '../../lib/utils';
+import { useSubjectSchema } from '../../hooks/useSubjectSchema';
+import { getTermFontClass, isRTL } from '../../lib/subjectHelpers';
 import { toast } from 'sonner';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -45,6 +47,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<SessionMode>('browse');
   const [showSummary, setShowSummary] = useState(false);
+  const { schema } = useSubjectSchema(topic.id);
   const [topicStats, setTopicStats] = useState<{ total: number, mastered: number, previousAccuracy: number, masteryPercentage?: number }>({ total: 0, mastered: 0, previousAccuracy: 0 });
   const [initialStats, setInitialStats] = useState<{ total: number, mastered: number, previousAccuracy: number, masteryPercentage?: number } | null>(null);
   const [isFlipped, setIsFlipped] = useState(false); // For flashcards
@@ -266,9 +269,12 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   const renderQuestion = () => {
     if (!currentQuestion) return null;
 
-    const { question_type, prompt, answer, distractors, metadata, arabic } = currentQuestion;
+    const { question_type, prompt, answer, distractors, metadata } = currentQuestion;
 
     if (question_type === 'flashcard') {
+      const isTermSide = !isFlipped; // Usually front is term
+      const showRTL = isRTL(schema);
+
       return (
         <div className="flex flex-col items-center w-full px-4">
           <motion.div 
@@ -277,21 +283,30 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
             animate={{ rotateY: isFlipped ? 180 : 0 }}
             transition={{ type: "spring", stiffness: 260, damping: 20 }}
           >
-            {/* Front */}
+            {/* Front (Term) */}
             <div className="absolute inset-0 backface-hidden bg-white rounded-[3rem] shadow-soft-lg flex flex-col items-center justify-center p-10 text-center border-2 border-slate-50">
                {metadata.image_url && (
                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl p-2">
                    {metadata.image_url.startsWith('http') ? <img src={metadata.image_url} alt="icon" className="w-full h-full object-contain" /> : metadata.image_url}
                  </div>
                )}
-               <h3 className="text-3xl font-black text-ink leading-snug pt-12">{prompt}</h3>
+               <div className={cn("flex flex-col items-center", showRTL && "text-right")} dir={showRTL ? "rtl" : "ltr"}>
+                 <h3 className={cn("font-black text-ink leading-snug pt-12", getTermFontClass(schema), showRTL ? "text-5xl" : "text-3xl")}>
+                   {prompt}
+                 </h3>
+                 {schema.extra_fields?.map(f => metadata[f.key] && (
+                   <div key={f.key} className="mt-2 px-3 py-1 bg-primary/5 text-primary text-[10px] font-black uppercase tracking-widest rounded-lg">
+                     {f.label}: {metadata[f.key]}
+                   </div>
+                 ))}
+               </div>
                <div className="mt-auto pt-6 flex items-center gap-2 text-primary font-black uppercase text-[10px] tracking-widest">
                  <RotateCcw className="w-3 h-3" /> Tap to Flip
                </div>
             </div>
-            {/* Back */}
+            {/* Back (Meaning) */}
             <div className="absolute inset-0 backface-hidden bg-primary rounded-[3rem] shadow-soft-lg flex flex-col items-center justify-center p-10 text-center [transform:rotateY(180deg)] text-white">
-               <h3 className="text-arabic text-6xl font-black mb-4 leading-tight">{answer}</h3>
+               <h3 className="text-4xl font-black mb-4 leading-tight">{answer}</h3>
                <div className="mt-auto pt-6 flex items-center gap-2 text-white/50 font-black uppercase text-[10px] tracking-widest">
                  Done? Tap to Close
                </div>
@@ -322,24 +337,31 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
     }
 
     if (question_type === 'multiple_choice') {
-      const isArabicPrompt = metadata.direction === 'ar_to_ms';
-      const isArabicOptions = metadata.direction === 'ms_to_ar';
+      const isTermToMeaning = metadata.direction === 'term_to_meaning' || metadata.direction === 'ar_to_ms';
+      const isMeaningToTerm = metadata.direction === 'meaning_to_term' || metadata.direction === 'ms_to_ar';
+      
+      const showPromptRTL = isRTL(schema) && isTermToMeaning;
+      const showOptionsRTL = isRTL(schema) && isMeaningToTerm;
 
       return (
         <div className="w-full max-w-2xl px-4">
           <Card className="mb-8 text-center relative overflow-hidden" padding="lg">
              <div className="flex flex-col items-center">
                <div className="w-16 h-1 bg-slate-100 rounded-full mb-8" />
-               <h3 className={cn("font-black text-ink leading-tight text-4xl", isArabicPrompt && "text-arabic")}>
-                  {prompt}
-               </h3>
+               <div dir={showPromptRTL ? "rtl" : "ltr"}>
+                 <h3 className={cn(
+                   "font-black text-ink leading-tight", 
+                   showPromptRTL ? cn(getTermFontClass(schema), "text-5xl") : "text-4xl"
+                 )}>
+                    {prompt}
+                 </h3>
+               </div>
              </div>
           </Card>
 
           <div className="grid grid-cols-1 gap-4">
             {allMultipleChoiceOptions.map((opt, i) => {
               const isCorrectOpt = opt === answer;
-              const isSelected = feedback && isCorrectOpt;
               
               return (
                 <button
@@ -351,7 +373,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
                     !feedback ? "bg-white border-slate-100 hover:border-primary hover:shadow-lg" : 
                     isCorrectOpt ? "bg-accent-mint/10 border-accent-mint text-emerald-900" : "bg-white border-slate-50 opacity-50 text-ink-muted"
                   )}
-                  dir={isArabicOptions ? "rtl" : "ltr"}
+                  dir={showOptionsRTL ? "rtl" : "ltr"}
                 >
                   <div className={cn(
                     "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-black",
@@ -360,7 +382,10 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
                   )}>
                     {String.fromCharCode(65 + i)}
                   </div>
-                  <span className={cn("flex-1 font-bold text-lg", isArabicOptions && "text-arabic text-3xl")}>
+                  <span className={cn(
+                    "flex-1 font-bold", 
+                    showOptionsRTL ? cn(getTermFontClass(schema), "text-4xl") : "text-lg"
+                  )}>
                     {opt}
                   </span>
                 </button>
@@ -378,7 +403,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
           <MatchingView 
             pairs={pairs} 
             onComplete={(isCorrect) => handleAnswer(isCorrect)} 
-            direction={metadata.direction || 'ar_to_ms'}
+            direction={metadata.direction || 'term_to_meaning'}
           />
         </div>
       );
@@ -390,7 +415,7 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
   /**
    * Inner components for specific question types
    */
-  function MatchingView({ pairs, onComplete, direction }: { pairs: {left: string, right: string}[], onComplete: (correct: boolean) => void, direction: string }) {
+   function MatchingView({ pairs, onComplete, direction }: { pairs: {left: string, right: string}[], onComplete: (correct: boolean) => void, direction: string }) {
     const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
     const [matches, setMatches] = useState<Record<string, string>>({});
     const [mistakes, setMistakes] = useState(0);
@@ -421,6 +446,9 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
       }
     };
 
+    const isLeftTerm = direction === 'term_to_meaning' || direction === 'ar_to_ms';
+    const isRightTerm = direction === 'meaning_to_term' || direction === 'ms_to_ar';
+
     return (
       <div className="w-full flex flex-col items-center">
         <h3 className="text-xl font-black text-ink mb-10">Padankan semua pasangan di bawah:</h3>
@@ -439,7 +467,12 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
                    "bg-white border-slate-100 hover:border-primary/30"
                  )}
                >
-                 <span className={cn("font-black", direction === 'ar_to_ms' ? "text-arabic text-4xl" : "text-xl")}>{item}</span>
+                 <span className={cn(
+                   "font-black text-center px-4", 
+                   isLeftTerm ? cn(getTermFontClass(schema), isRTL(schema) ? "text-4xl" : "text-xl") : "text-xl"
+                 )}>
+                   {item}
+                 </span>
                </Card>
              ))}
            </div>
@@ -458,7 +491,12 @@ export default function StudySession({ user, topic, setName, onClose }: StudySes
                      "bg-white border-slate-100 hover:border-primary/30"
                    )}
                  >
-                   <span className={cn("font-black", direction === 'ms_to_ar' ? "text-arabic text-4xl" : "text-xl")}>{item}</span>
+                   <span className={cn(
+                     "font-black text-center px-4", 
+                     isRightTerm ? cn(getTermFontClass(schema), isRTL(schema) ? "text-4xl" : "text-xl") : "text-xl"
+                   )}>
+                     {item}
+                   </span>
                  </Card>
                );
              })}

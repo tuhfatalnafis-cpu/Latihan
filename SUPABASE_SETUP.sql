@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.subjects (
   name text NOT NULL,
   description text,
   grade text,
+  field_schema jsonb DEFAULT '{"term_label": "Istilah", "meaning_label": "Maksud", "extra_fields": [], "rtl": false, "term_font": "default"}'::jsonb,
   created_by uuid REFERENCES auth.users ON DELETE SET NULL,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -73,10 +74,9 @@ CREATE TABLE IF NOT EXISTS public.progress (
 CREATE TABLE IF NOT EXISTS public.vocabulary (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   topic_id uuid REFERENCES public.topics ON DELETE CASCADE NOT NULL,
-  arabic text NOT NULL,
-  meaning_ms text NOT NULL,
-  transliteration text,
-  image_keyword text,
+  term text NOT NULL,
+  meaning text NOT NULL,
+  extra_fields jsonb DEFAULT '{}'::jsonb,
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );

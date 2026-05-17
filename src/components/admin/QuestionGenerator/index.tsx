@@ -4,6 +4,7 @@ import { X, BrainCircuit, Loader2 } from 'lucide-react';
 import GenerationConfig from './GenerationConfig';
 import GenerationPreview from './GenerationPreview';
 import { VocabRow, GenConfig, GeneratedMCQ, generateMCQs } from '../../../lib/questionGenerator';
+import { SubjectFieldSchema } from '../../../lib/subjectPresets';
 import { generateQuestionsWithFiles } from '../../../lib/aiQuestionService';
 import { enhanceDistractors } from '../../../lib/aiQuestionEnhancer';
 import { db } from '../../../lib/db';
@@ -11,13 +12,14 @@ import { toast } from 'sonner';
 
 interface QuestionGeneratorProps {
   topicId: string;
+  schema: SubjectFieldSchema;
   userId: string;
   library: VocabRow[];
   onClose: () => void;
   onComplete: () => void;
 }
 
-export default function QuestionGenerator({ topicId, userId, library, onClose, onComplete }: QuestionGeneratorProps) {
+export default function QuestionGenerator({ topicId, schema, userId, library, onClose, onComplete }: QuestionGeneratorProps) {
   const [step, setStep] = useState(1);
   const [config, setConfig] = useState<{ name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string; files?: { data: string; mimeType: string }[] } & GenConfig | null>(null);
   const [questions, setQuestions] = useState<GeneratedMCQ[]>([]);
@@ -78,23 +80,30 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
     if (!config) return;
 
     try {
-      const questionsToInsert = finalQuestions.map(q => ({
-        topic_id: topicId,
-        question_type: 'multiple_choice' as const,
-        prompt: q.prompt,
-        answer: q.answer,
-        arabic: q.direction === 'ar_to_ms' ? q.prompt : (q.direction === 'ms_to_ar' ? q.answer : ''),
-        distractors: q.distractors,
-        metadata: {
+      const questionsToInsert = finalQuestions.map(q => {
+        const metadata: any = {
           set_name: config.name,
           direction: q.direction,
           generation_method: config.strategy === 'pure_ai' ? 'pure_ai' : (config.strategy === 'ai' ? 'ai_enhanced' : 'random'),
           source_vocab_id: q.source_vocab_id,
           image_keyword: q.metadata.image_keyword,
-          transliteration: q.metadata.transliteration
-        },
-        created_by: userId
-      }));
+        };
+
+        // Preserve extra fields in metadata for rendering
+        schema?.extra_fields?.forEach(f => {
+          if (q.metadata?.[f.key]) metadata[f.key] = q.metadata[f.key];
+        });
+
+        return {
+          topic_id: topicId,
+          question_type: 'multiple_choice' as const,
+          prompt: q.prompt,
+          answer: q.answer,
+          distractors: q.distractors,
+          metadata,
+          created_by: userId
+        };
+      });
 
       await db.questions.batchCreate(questionsToInsert);
       toast.success(`Berjaya menyimpan set soalan '${config.name}'!`);
@@ -130,6 +139,7 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
               >
                 <GenerationConfig 
                   libSize={library.length} 
+                  schema={schema}
                   onNext={handleConfigComplete} 
                   onCancel={onClose} 
                 />
@@ -143,6 +153,7 @@ export default function QuestionGenerator({ topicId, userId, library, onClose, o
               >
                 <GenerationPreview 
                   questions={questions}
+                  schema={schema}
                   isEnhancing={isEnhancing}
                   enhanceProgress={enhanceProgress}
                   onBack={() => setStep(1)}

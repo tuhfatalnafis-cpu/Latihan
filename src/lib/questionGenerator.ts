@@ -7,26 +7,27 @@ import { Question } from './supabase';
 
 export interface VocabRow {
   id?: string;
-  arabic: string;
-  meaning_ms: string;
-  transliteration?: string;
+  term: string;
+  meaning: string;
+  extra_fields?: Record<string, any>;
+  metadata?: Record<string, any>;
   image_keyword?: string;
 }
 
 export interface GenConfig {
   count: number;
-  direction: 'ar_to_ms' | 'ms_to_ar' | 'both' | 'general';
+  direction: 'term_to_meaning' | 'meaning_to_term' | 'both' | 'general';
 }
 
 export interface GeneratedMCQ {
   prompt: string;
   answer: string;
   distractors: [string, string, string];
-  direction: 'ar_to_ms' | 'ms_to_ar' | 'general';
+  direction: 'term_to_meaning' | 'meaning_to_term' | 'ar_to_ms' | 'ms_to_ar' | 'general';
   source_vocab_id?: string;
   metadata: { 
     image_keyword?: string;
-    transliteration?: string;
+    [key: string]: any;
   };
 }
 
@@ -59,22 +60,22 @@ export function generateMCQs(
     throw new Error('Pustaka kosa kata memerlukan sekurang-kurangnya 4 perkataan untuk menjana soalan.');
   }
 
-  const pool: { vocab: VocabRow; direction: 'ar_to_ms' | 'ms_to_ar' }[] = [];
+  const pool: { vocab: VocabRow; direction: 'term_to_meaning' | 'meaning_to_term' }[] = [];
 
   library.forEach(vocab => {
-    if (config.direction === 'ar_to_ms' || config.direction === 'both') {
-      pool.push({ vocab, direction: 'ar_to_ms' });
+    if (config.direction === 'term_to_meaning' || config.direction === 'both') {
+      pool.push({ vocab, direction: 'term_to_meaning' });
     }
-    if (config.direction === 'ms_to_ar' || config.direction === 'both') {
-      pool.push({ vocab, direction: 'ms_to_ar' });
+    if (config.direction === 'meaning_to_term' || config.direction === 'both') {
+      pool.push({ vocab, direction: 'meaning_to_term' });
     }
   });
 
   const shuffledPool = shuffleArray(pool);
   const selected = shuffledPool.slice(0, config.count);
 
-  const arabicPool = library.map(v => v.arabic);
-  const malayPool = library.map(v => v.meaning_ms);
+  const termPool = library.map(v => v.term);
+  const meaningPool = library.map(v => v.meaning);
 
   return selected.map(entry => {
     const { vocab, direction } = entry;
@@ -82,14 +83,14 @@ export function generateMCQs(
     let answer = '';
     let distractors: [string, string, string];
 
-    if (direction === 'ar_to_ms') {
-      prompt = vocab.arabic;
-      answer = vocab.meaning_ms;
-      distractors = pickDistractors(malayPool, answer);
+    if (direction === 'term_to_meaning') {
+      prompt = vocab.term;
+      answer = vocab.meaning;
+      distractors = pickDistractors(meaningPool, answer);
     } else {
-      prompt = vocab.meaning_ms;
-      answer = vocab.arabic;
-      distractors = pickDistractors(arabicPool, answer);
+      prompt = vocab.meaning;
+      answer = vocab.term;
+      distractors = pickDistractors(termPool, answer);
     }
 
     return {
@@ -99,8 +100,9 @@ export function generateMCQs(
       direction,
       source_vocab_id: vocab.id,
       metadata: {
+        ...(vocab.metadata || {}),
         image_keyword: vocab.image_keyword,
-        transliteration: vocab.transliteration
+        ...(vocab.extra_fields || {})
       }
     };
   });

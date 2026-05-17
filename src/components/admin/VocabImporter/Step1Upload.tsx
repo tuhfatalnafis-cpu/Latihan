@@ -3,17 +3,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Upload, CheckCircle2, ChevronRight, Loader2, Database, AlertCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import { cn } from '../../../lib/utils';
-import { VocabRow } from '../../../lib/questionGenerator';
+import { SubjectFieldSchema } from '../../../lib/subjectPresets';
 
 interface Step1Props {
-  onNext: (data: Partial<VocabRow>[]) => void;
+  schema: SubjectFieldSchema;
+  onNext: (data: any[]) => void;
   onCancel: () => void;
 }
 
-export default function Step1Upload({ onNext, onCancel }: Step1Props) {
+export default function Step1Upload({ schema, onNext, onCancel }: Step1Props) {
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<Partial<VocabRow>[]>([]);
+  const [preview, setPreview] = useState<any[]>([]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,23 +29,35 @@ export default function Step1Upload({ onNext, onCancel }: Step1Props) {
       complete: (results) => {
         const data = results.data as any[];
         
-        // Basic validation of columns
-        const hasArabic = data.some(row => row.arabic);
-        const hasMalay = data.some(row => row.meaning_ms || row.meaning);
+        // Basic validation of columns: search for term/meaning or specific labels
+        // We always expect 'term' and 'meaning' in CSV for simplicity or we map them
+        const hasTerm = data.some(row => row.term || row.word || row.item || row[schema.term_label.toLowerCase()]);
+        const hasMeaning = data.some(row => row.meaning || row.definition || row[schema.meaning_label.toLowerCase()]);
 
-        if (!hasArabic || !hasMalay) {
-          setError('Fail CSV tidak mengandungi pengepala yang betul (arabic, meaning_ms).');
+        if (!hasTerm || !hasMeaning) {
+          setError(`Fail CSV tidak mengandungi pengepala yang boleh dikenali (term, meaning) atau (${schema.term_label}, ${schema.meaning_label}).`);
           setParsing(false);
           return;
         }
 
-        const validRows = data.map((row, index) => ({
-          id: `temp-${index}`,
-          arabic: row.arabic || '',
-          meaning_ms: row.meaning_ms || row.meaning || '',
-          transliteration: row.transliteration || '',
-          image_keyword: row.image_keyword || ''
-        })).filter(row => row.arabic && row.meaning_ms);
+        const validRows = data.map((row, index) => {
+          const termKey = Object.keys(row).find(k => ['term', 'word', 'item', schema.term_label.toLowerCase()].includes(k.toLowerCase())) || 'term';
+          const meaningKey = Object.keys(row).find(k => ['meaning', 'definition', 'desc', schema.meaning_label.toLowerCase()].includes(k.toLowerCase())) || 'meaning';
+          
+          const extraFields: Record<string, any> = {};
+          schema?.extra_fields?.forEach(f => {
+            if (row[f.key]) extraFields[f.key] = row[f.key];
+            else if (row[f.label.toLowerCase()]) extraFields[f.key] = row[f.label.toLowerCase()];
+          });
+
+          return {
+            id: `temp-${index}`,
+            term: row[termKey] || '',
+            meaning: row[meaningKey] || '',
+            extra_fields: extraFields,
+            image_keyword: row.image_keyword || row.icon || ''
+          };
+        }).filter(row => row.term && row.meaning);
 
         setPreview(validRows);
         setParsing(false);
@@ -76,7 +89,10 @@ export default function Step1Upload({ onNext, onCancel }: Step1Props) {
               <Upload className="w-10 h-10" />
             </div>
             <p className="font-black text-slate-800">Klik atau seret fail CSV</p>
-            <p className="text-slate-400 text-xs font-bold mt-2 uppercase tracking-widest">arabic, meaning_ms, transliteration, image_keyword</p>
+            <p className="text-slate-400 text-[10px] font-bold mt-2 uppercase tracking-widest bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+              Jangkaan Kolum: <span className="text-primary">term (atau {schema.term_label}), meaning (atau {schema.meaning_label})</span>
+              {schema?.extra_fields?.length > 0 && `, ${schema.extra_fields.map(f => f.key).join(', ')}`}
+            </p>
           </div>
         </div>
       ) : (
@@ -90,15 +106,15 @@ export default function Step1Upload({ onNext, onCancel }: Step1Props) {
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-100">
                 <tr>
-                  <th className="p-3 text-[10px] font-black uppercase text-slate-400">Arab</th>
-                  <th className="p-3 text-[10px] font-black uppercase text-slate-400">Melayu</th>
+                  <th className="p-3 text-[10px] font-black uppercase text-slate-400">{schema.term_label}</th>
+                  <th className="p-3 text-[10px] font-black uppercase text-slate-400">{schema.meaning_label}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {preview.slice(0, 5).map((row, i) => (
                   <tr key={i}>
-                    <td className="p-3 text-arabic text-lg">{row.arabic}</td>
-                    <td className="p-3 text-xs font-bold text-slate-600">{row.meaning_ms}</td>
+                    <td className={cn("p-3 text-lg font-bold", schema.term_font === 'arabic' ? 'text-arabic text-2xl' : 'text-base')}>{row.term}</td>
+                    <td className="p-3 text-xs font-bold text-slate-600">{row.meaning}</td>
                   </tr>
                 ))}
                 {preview.length > 5 && (
