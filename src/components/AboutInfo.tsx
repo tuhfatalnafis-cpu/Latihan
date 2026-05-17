@@ -38,7 +38,9 @@ export function AboutDeveloperCard() {
               <div className="pt-3 border-t border-slate-100 flex flex-col gap-1">
                 <p className="text-[10px] font-black text-primary uppercase tracking-widest">Pasukan Utama:</p>
                 <p className="text-ink">1. Dr Asyraf Saharudin</p>
-                <p className="text-ink">2. Dr Atikah</p>
+                <p className="text-ink">2. Dr Atikah Rahman</p>
+                <p className="text-ink">3. Abdullah Tariq</p>
+                <p className="text-ink">4. Maryam Munirah</p>
               </div>
             )}
           </div>
