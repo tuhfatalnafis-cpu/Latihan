@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.questions (
   question_type text NOT NULL,
   prompt text NOT NULL,
   answer text NOT NULL,
+  explanation text,
   arabic text,
   transliteration text,
   distractors text[],
