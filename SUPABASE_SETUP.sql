@@ -81,6 +81,12 @@ CREATE TABLE IF NOT EXISTS public.vocabulary (
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.app_settings (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 2. Enable RLS (Safe to run multiple times)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
@@ -90,6 +96,7 @@ ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vocabulary ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 
 -- 3. Create policies (Checking if they exist first)
 DO $$ 
@@ -170,4 +177,43 @@ BEGIN
     CREATE POLICY "Admins manage vocabulary" ON public.vocabulary FOR ALL TO authenticated 
     USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
     WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+
+    -- APP SETTINGS
+    DROP POLICY IF EXISTS "Settings viewable by everyone" ON public.app_settings;
+    CREATE POLICY "Settings viewable by everyone" ON public.app_settings FOR SELECT USING (true);
+    
+    DROP POLICY IF EXISTS "Admins manage settings" ON public.app_settings;
+    CREATE POLICY "Admins manage settings" ON public.app_settings FOR ALL TO authenticated 
+    USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
+    WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 END $$;
+
+-- 4. RPCs
+CREATE OR REPLACE FUNCTION public.get_study_days(user_id_param uuid)
+RETURNS table (streak integer) 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH daily_attempts AS (
+    SELECT DISTINCT answered_at::date as study_day
+    FROM public.attempts
+    WHERE student_id = user_id_param
+    ORDER BY study_day DESC
+  ),
+  streaks AS (
+    SELECT
+      study_day,
+      study_day - (row_number() OVER (ORDER BY study_day DESC))::integer * INTERVAL '1 day' as grp
+    FROM daily_attempts
+  ),
+  current_streak AS (
+    SELECT count(*)::integer as streak_count
+    FROM streaks
+    WHERE grp = (SELECT grp FROM streaks LIMIT 1)
+    AND (SELECT study_day FROM streaks LIMIT 1) >= (now()::date - INTERVAL '1 day')
+  )
+  SELECT COALESCE((SELECT streak_count FROM current_streak), 0);
+END;
+$$;

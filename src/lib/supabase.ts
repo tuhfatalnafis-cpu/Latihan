@@ -22,9 +22,17 @@ const supabaseAnonKey = (
   ''
 ).trim();
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase configuration missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in project settings.');
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your-project-id') || supabaseUrl.includes('placeholder')) {
+  console.warn('Supabase configuration is missing or using placeholder values. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in project settings.');
 }
+
+// Helper to check if supabase is properly configured
+export const isSupabaseConfigured = () => {
+  return supabaseUrl && 
+         supabaseAnonKey && 
+         !supabaseUrl.includes('your-project-id') && 
+         !supabaseUrl.includes('placeholder');
+};
 
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co', 

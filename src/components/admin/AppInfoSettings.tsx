@@ -11,6 +11,7 @@ export default function AppInfoSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -32,14 +33,15 @@ export default function AppInfoSettings() {
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setError(null);
     try {
       await db.settings.set('about_developer', aboutDeveloper);
       await db.settings.set('our_mission', ourMission);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving settings:', err);
-      alert('Gagal menyimpan tetapan. Sila cuba lagi.');
+      setError(err.message || 'Gagal menyimpan tetapan. Pastikan jadual database telah wujud.');
     } finally {
       setSaving(false);
     }
@@ -70,6 +72,17 @@ export default function AppInfoSettings() {
           {saving ? 'Menyimpan...' : saved ? 'Berjaya!' : 'Simpan Tetapan'}
         </Button>
       </div>
+
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-sm font-bold flex items-center gap-3"
+        >
+          <Sparkles className="w-5 h-5 flex-shrink-0" />
+          <p>{error}</p>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="space-y-4 border-2 border-slate-50">

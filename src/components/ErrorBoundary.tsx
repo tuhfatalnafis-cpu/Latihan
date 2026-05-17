@@ -25,6 +25,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   public render() {
     if (this.state.hasError) {
+      const isFetchError = this.state.error?.message?.includes('Failed to fetch') || 
+                           this.state.error?.message?.toLowerCase().includes('network error');
+
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-10 text-center font-sans" id="error-screen">
           <div className="bg-white p-12 rounded-[40px] shadow-2xl border border-rose-100 max-w-xl w-full">
@@ -33,7 +36,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             </div>
             <h1 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">System Initialization Error</h1>
             <p className="text-slate-500 font-medium mb-8 leading-relaxed">
-              Terdapat ralat semasa memuatkan aplikasi. Ini biasanya disebabkan oleh konfigurasi yang tidak lengkap atau masalah sambungan.
+              {isFetchError 
+                ? "Sistem gagal berhubung dengan pangkalan data. Sila pastikan VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY telah dikonfigurasi dengan betul dalam tetapan projek." 
+                : "Terdapat ralat semasa memuatkan aplikasi. Ini biasanya disebabkan oleh konfigurasi yang tidak lengkap atau masalah sambungan."
+              }
             </p>
             
             <div className="bg-slate-50 p-6 rounded-2xl text-left border border-slate-100 mb-8 overflow-auto max-h-40">

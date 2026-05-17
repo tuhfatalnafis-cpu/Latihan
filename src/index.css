@@ -2,8 +2,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Plus Jakarta Sans", "Amiri", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Plus Jakarta Sans", "Amiri", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-arabic: "Amiri", serif;
 
   --color-primary: #4F7CFF;

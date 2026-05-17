@@ -21,7 +21,9 @@ import {
   Clock,
   Target,
   BarChart2,
-  Sparkles
+  Sparkles,
+  Search,
+  X
 } from 'lucide-react';
 import { db } from '../../lib/db';
 import { Subject, Syllabus, Topic } from '../../lib/supabase';
@@ -80,6 +82,37 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     totalTimeMs: number,
   }>({ streak: 0, totalQuestions: 0, totalCorrect: 0, totalAttempts: 0, accuracy: 0, totalTimeMs: 0 });
   const [loading, setLoading] = useState(true);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState<{
+    subjects: Subject[],
+    syllabi: (Syllabus & { subjects: { name: string } })[],
+    topics: (Topic & { syllabi: { name: string, subject_id: string, subjects: { name: string } } })[]
+  }>({ subjects: [], syllabi: [], topics: [] });
+
+  useEffect(() => {
+    if (searchQuery.length < 2) {
+      setSearchResults({ subjects: [], syllabi: [], topics: [] });
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await db.search.all(searchQuery);
+        setSearchResults(results as any);
+      } catch (err) {
+        console.error('Search error:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
 
   const groupedSubjects = React.useMemo(() => {
     return subjects.reduce((acc, s) => {
@@ -290,16 +323,19 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
     </div>
   );
 
-  const handleTopicClick = async (topic: Topic) => {
+  const handleTopicClick = async (topic: Topic, forceSubject?: Subject, forceSyllabus?: Syllabus) => {
     try {
       const questions = await db.questions.listForTopic(topic.id);
       const uniqueSets = Array.from(new Set(questions.map(q => (q.metadata as any)?.set_name || 'Tanpa Nama Set')));
       
+      const subject = forceSubject || (view as any).subject;
+      const syllabus = forceSyllabus || (view as any).syllabus;
+
       if (uniqueSets.length > 1) {
         setView({ 
           type: 'browse_sets', 
-          subject: (view as any).subject, 
-          syllabus: (view as any).syllabus, 
+          subject, 
+          syllabus, 
           topic, 
           sets: uniqueSets 
         });
@@ -307,11 +343,13 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
         setView({ 
           type: 'study', 
           topic, 
-          subject: (view as any).subject, 
-          syllabus: (view as any).syllabus,
+          subject, 
+          syllabus,
           setName: uniqueSets[0] === 'Tanpa Nama Set' ? undefined : uniqueSets[0]
         });
       }
+      setIsSearchActive(false);
+      setSearchQuery('');
     } catch (err) {
       console.error(err);
     }
@@ -735,25 +773,207 @@ export default function StudentDashboard({ user, onLogout }: StudentDashboardPro
       setActiveTab(tab as TabState);
       if (tab === 'subjects') setView({ type: 'browse_subjects' });
     }}>
-      <header className="px-6 py-8 flex justify-between items-center">
-        <div className="flex flex-col">
-          <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-1">Cepat Belajar</p>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-            <span className="text-xs font-black text-ink">Sesi Pintar Aktif</span>
-          </div>
+      <header className="px-6 py-8 flex justify-between items-center sticky top-0 bg-bg-cream/80 backdrop-blur-md z-40">
+        <AnimatePresence mode="wait">
+          {!isSearchActive ? (
+            <motion.div 
+              key="logo"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex flex-col"
+            >
+              <p className="text-[10px] font-black text-primary uppercase tracking-[0.3em] mb-1">Cepat Belajar</p>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                <span className="text-xs font-black text-ink">Sesi Pintar Aktif</span>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="search-input"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="flex-1 mr-4"
+            >
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-muted" />
+                <input
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari subjek, silibus atau tajuk..."
+                  className="w-full h-12 pl-12 pr-4 bg-white border-2 border-slate-100 rounded-2xl outline-none focus:border-primary transition-all font-bold text-ink"
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              setIsSearchActive(!isSearchActive);
+              if (isSearchActive) setSearchQuery('');
+            }}
+            className={cn(
+              "w-14 h-14 rounded-[1.2rem] shadow-soft relative active:scale-90 transition-all flex items-center justify-center border-2",
+              isSearchActive ? "bg-primary text-white border-primary" : "bg-white text-ink-muted border-white"
+            )}
+          >
+            {isSearchActive ? <X className="w-6 h-6" /> : <Search className="w-6 h-6" />}
+          </button>
+          
+          {!isSearchActive && (
+            <button className="w-14 h-14 bg-white/80 backdrop-blur rounded-[1.2rem] shadow-soft relative active:scale-90 transition-all flex items-center justify-center border-2 border-white">
+              <Bell className="w-6 h-6 text-ink-muted" />
+              <div className="absolute top-4 right-4 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white shadow-soft" />
+            </button>
+          )}
         </div>
-        <button className="w-14 h-14 bg-white/80 backdrop-blur rounded-[1.2rem] shadow-soft relative active:scale-90 transition-all flex items-center justify-center border-2 border-white">
-          <Bell className="w-6 h-6 text-ink-muted" />
-          <div className="absolute top-4 right-4 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white shadow-soft" />
-        </button>
       </header>
 
-      <main className="px-6 md:px-10 max-w-lg mx-auto w-full">
-        {activeTab === 'dashboard' && renderDashboard()}
-        {activeTab === 'subjects' && renderSubjects()}
-        {activeTab === 'progress' && renderProgress()}
-        {activeTab === 'profile' && renderProfile()}
+      <main className="px-6 md:px-10 max-w-lg mx-auto w-full relative">
+        {/* Search Results Overlay */}
+        <AnimatePresence>
+          {isSearchActive && (searchQuery.length > 0) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute inset-x-6 top-0 bg-bg-cream min-h-[60vh] z-30 space-y-6 pb-20"
+            >
+              {isSearching ? (
+                <div className="py-20 flex flex-col items-center justify-center text-ink-muted">
+                  <Loader2 className="w-10 h-10 animate-spin mb-4 text-primary" />
+                  <p className="font-black text-xs uppercase tracking-widest">Mencari...</p>
+                </div>
+              ) : (
+                <>
+                  {searchResults.subjects.length === 0 && 
+                   searchResults.syllabi.length === 0 && 
+                   searchResults.topics.length === 0 ? (
+                    <div className="py-20 text-center space-y-4">
+                      <Mascot gender={user.gender} className="size-40 mx-auto" />
+                      <p className="text-xl font-black text-ink">Tiada hasil ditemui</p>
+                      <p className="text-ink-muted font-bold">Cuba kata kunci yang lain</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      {/* Subjects */}
+                      {searchResults.subjects.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black text-primary uppercase tracking-[0.2em] px-2">Subjek</h4>
+                          {searchResults.subjects.map(subject => (
+                            <Card 
+                              key={subject.id} 
+                              className="cursor-pointer border-2 border-slate-50 hover:border-primary/20"
+                              onClick={() => {
+                                setActiveTab('subjects');
+                                setView({ type: 'browse_syllabi', subject });
+                                setIsSearchActive(false);
+                                setSearchQuery('');
+                              }}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                                  <Library className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="font-black text-ink leading-tight">{subject.name}</p>
+                                  <p className="text-[10px] font-bold text-ink-muted uppercase">{subject.grade || 'Umum'}</p>
+                                </div>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Syllabi */}
+                      {searchResults.syllabi.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black text-accent-warm uppercase tracking-[0.2em] px-2">Silibus</h4>
+                          {searchResults.syllabi.map(syllabus => (
+                            <Card 
+                              key={syllabus.id} 
+                              className="cursor-pointer border-2 border-slate-50 hover:border-accent-warm/20"
+                              onClick={() => {
+                                // We need the subject too
+                                const fetchAndGo = async () => {
+                                  const subjects = await db.subjects.list();
+                                  const subject = subjects.find(s => s.id === syllabus.subject_id);
+                                  if (subject) {
+                                    setActiveTab('subjects');
+                                    setView({ type: 'browse_topics', subject, syllabus });
+                                    setIsSearchActive(false);
+                                    setSearchQuery('');
+                                  }
+                                };
+                                fetchAndGo();
+                              }}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-accent-warm/10 rounded-xl flex items-center justify-center text-accent-warm">
+                                  <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="font-black text-ink leading-tight">{syllabus.name}</p>
+                                  <p className="text-[10px] font-bold text-ink-muted uppercase">{syllabus.subjects?.name || 'Subjek'}</p>
+                                </div>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Topics */}
+                      {searchResults.topics.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black text-accent-mint uppercase tracking-[0.2em] px-2">Tajuk</h4>
+                          {searchResults.topics.map(topic => (
+                            <Card 
+                              key={topic.id} 
+                              className="cursor-pointer border-2 border-slate-50 hover:border-accent-mint/20"
+                              onClick={() => {
+                                const subject = topic.syllabi.subjects as any;
+                                const syllabus = topic.syllabi as any;
+                                setActiveTab('subjects');
+                                handleTopicClick(topic, subject, syllabus);
+                              }}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-accent-mint/10 rounded-xl flex items-center justify-center text-accent-mint">
+                                  <BrainCircuit className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="font-black text-ink leading-tight">{topic.name}</p>
+                                  <p className="text-[10px] font-bold text-ink-muted uppercase">
+                                    {topic.syllabi.name} • {topic.syllabi.subjects.name}
+                                  </p>
+                                </div>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!isSearchActive && (
+          <>
+            {activeTab === 'dashboard' && renderDashboard()}
+            {activeTab === 'subjects' && renderSubjects()}
+            {activeTab === 'progress' && renderProgress()}
+            {activeTab === 'profile' && renderProfile()}
+          </>
+        )}
       </main>
     </StudentLayout>
   );

@@ -169,7 +169,10 @@ export const db = {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error in db.settings.set:', error);
+        throw error;
+      }
       return data;
     }
   },
@@ -660,6 +663,41 @@ export const db = {
         .delete()
         .eq('question_id', questionId);
       if (error) throw error;
+    }
+  },
+
+  search: {
+    async all(searchTerm: string) {
+      if (!searchTerm || searchTerm.length < 2) {
+        return { subjects: [], syllabi: [], topics: [] };
+      }
+
+      // Search subjects
+      const { data: subjects } = await supabase
+        .from('subjects')
+        .select('*')
+        .ilike('name', `%${searchTerm}%`)
+        .limit(5);
+
+      // Search syllabi
+      const { data: syllabi } = await supabase
+        .from('syllabi')
+        .select('*, subjects(name)')
+        .ilike('name', `%${searchTerm}%`)
+        .limit(5);
+
+      // Search topics
+      const { data: topics } = await supabase
+        .from('topics')
+        .select('*, syllabi(name, subject_id, subjects(name))')
+        .ilike('name', `%${searchTerm}%`)
+        .limit(10);
+
+      return {
+        subjects: (subjects || []) as Subject[],
+        syllabi: (syllabi || []) as (Syllabus & { subjects: { name: string } })[],
+        topics: (topics || []) as (Topic & { syllabi: { name: string, subject_id: string, subjects: { name: string } } })[]
+      };
     }
   }
 };
