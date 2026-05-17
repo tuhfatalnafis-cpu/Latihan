@@ -34,14 +34,7 @@ import FillBlankMode from './study/FillBlankMode';
 import TrueFalseMode from './study/TrueFalseMode';
 import UnsupportedFormat from './study/UnsupportedFormat';
 
-const DEFAULT_SCHEMA = {
-  id: 'default',
-  name: 'Default',
-  term_label: 'Perkataan',
-  meaning_label: 'Maksud',
-  term_language: 'ms',
-  meaning_language: 'ms'
-};
+import { DEFAULT_SCHEMA } from '../../lib/subjectPresets';
 
 const shuffleArray = <T,>(array: T[]): T[] => {
   return [...array].sort(() => Math.random() - 0.5);

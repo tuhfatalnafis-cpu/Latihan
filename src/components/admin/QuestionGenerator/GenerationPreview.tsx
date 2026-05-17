@@ -171,6 +171,16 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
                             )}
                           </div>
                         )}
+
+                        <div>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1 block">Penjelasan (Opsional)</label>
+                          <textarea 
+                            value={editForm.explanation || ''}
+                            onChange={e => setEditForm({ ...editForm, explanation: e.target.value })}
+                            className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-400 text-slate-600 text-xs font-bold min-h-[60px]"
+                            placeholder="Tulis penjelasan ringkas di sini..."
+                          />
+                        </div>
                         
                         {editForm.question_type === 'true_false' && (
                           <div className="grid grid-cols-1 gap-2">
@@ -229,6 +239,11 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
                             <span key={di} className="text-slate-400 italic">{d}</span>
                           ))}
                         </div>
+                        {q.explanation && (
+                          <div className="mt-1 text-[10px] text-slate-400 italic font-medium bg-slate-50 px-2 py-1 rounded">
+                             💡 {q.explanation}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -274,6 +289,11 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
                       <div className="flex flex-col gap-1">
                         <div className={cn("text-sm font-bold text-ink", isRTL(schema) && getTermFontClass(schema))}>{q.prompt}</div>
                         <div className="text-xs text-primary font-bold">Maksud: {q.answer}</div>
+                        {q.explanation && (
+                          <div className="mt-1 text-[10px] text-slate-400 italic font-medium bg-slate-50 px-2 py-1 rounded">
+                             💡 {q.explanation}
+                          </div>
+                        )}
                       </div>
                     )}
                   </td>

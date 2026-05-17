@@ -32,6 +32,7 @@ export async function generateQuestionsWithFiles(
       question_type: q.question_type || 'multiple_choice',
       prompt: q.prompt,
       answer: q.answer,
+      explanation: q.explanation,
       distractors: q.distractors,
       direction: q.direction || 'general',
       source_vocab_id: undefined,

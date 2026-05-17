@@ -85,12 +85,18 @@ export default function TrueFalseMode({ question, schema, onAnswer }: TrueFalseM
       </div>
 
       {feedback && (
-         <div className="mt-12 text-center animate-in fade-in slide-in-from-top-4">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Maklumat Sebenar:</p>
+         <div className="mt-12 text-center animate-in fade-in slide-in-from-top-4 w-full px-8 py-6 bg-slate-50 rounded-[2rem]">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+              {question.explanation ? 'Penjelasan:' : 'Maklumat Sebenar:'}
+            </p>
             <p className="text-xl font-bold text-ink">
-              <span className={cn(showRTL && getTermFontClass(schema))} dir={showRTL ? "rtl" : "ltr"}>
-                {question.metadata.term}
-              </span> bermaksud <span className="text-primary">{question.metadata.actual_meaning}</span>
+              {question.explanation || (
+                <>
+                  <span className={cn(showRTL && getTermFontClass(schema))} dir={showRTL ? "rtl" : "ltr"}>
+                    {question.metadata.term}
+                  </span> bermaksud <span className="text-primary">{question.metadata.actual_meaning}</span>
+                </>
+              )}
             </p>
          </div>
       )}

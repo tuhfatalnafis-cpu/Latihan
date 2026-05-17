@@ -100,6 +100,7 @@ export interface Question {
   question_type: QuestionType;
   prompt: string;
   answer: string;
+  explanation?: string;
   arabic?: string;
   transliteration?: string;
   distractors: string[];

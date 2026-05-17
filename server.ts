@@ -72,10 +72,11 @@ async function startServer() {
                   maxItems: 3
                 },
                 direction: { type: Type.STRING },
+                explanation: { type: Type.STRING },
                 transliteration: { type: Type.STRING },
                 image_keyword: { type: Type.STRING }
               },
-              required: ['prompt', 'answer', 'distractors', 'direction']
+              required: ['prompt', 'answer', 'distractors', 'direction', 'explanation']
             }
           }
         }

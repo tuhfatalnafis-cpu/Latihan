@@ -96,6 +96,7 @@ export default function QuestionGenerator({ topicId, schema, userId, library, on
           question_type: q.question_type,
           prompt: q.prompt,
           answer: q.answer,
+          explanation: q.explanation,
           distractors: q.distractors,
           metadata,
           created_by: userId

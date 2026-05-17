@@ -90,14 +90,25 @@ export default function FillBlankMode({ question, schema, onAnswer }: FillBlankM
         )}
 
         {submitted && (
-          <div className="text-center animate-in fade-in slide-in-from-top-4">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Jawapan Betul:</p>
-             <p className={cn(
-               "text-3xl font-black text-ink",
-               showInputRTL ? getTermFontClass(schema) : ""
-             )} dir={showInputRTL ? "rtl" : "ltr"}>
-               {question.answer}
-             </p>
+          <div className="space-y-6 animate-in fade-in slide-in-from-top-4">
+             <div className="text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Jawapan Betul:</p>
+                <p className={cn(
+                  "text-3xl font-black text-ink",
+                  showInputRTL ? getTermFontClass(schema) : ""
+                )} dir={showInputRTL ? "rtl" : "ltr"}>
+                  {question.answer}
+                </p>
+             </div>
+             
+             {question.explanation && (
+                <div className="p-6 bg-slate-50 rounded-3xl w-full">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Penjelasan:</p>
+                   <p className="text-lg font-bold text-ink">
+                     {question.explanation}
+                   </p>
+                </div>
+             )}
           </div>
         )}
       </form>

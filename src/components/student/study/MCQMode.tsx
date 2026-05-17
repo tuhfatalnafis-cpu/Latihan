@@ -73,6 +73,15 @@ export default function MCQMode({ question, schema, feedback, onAnswer }: MCQMod
           );
         })}
       </div>
+
+      {feedback && question.explanation && (
+         <div className="mt-8 p-6 bg-slate-50 rounded-3xl w-full animate-in fade-in slide-in-from-top-4">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Penjelasan:</p>
+            <p className="text-lg font-bold text-ink">
+              {question.explanation}
+            </p>
+         </div>
+      )}
     </div>
   );
 }

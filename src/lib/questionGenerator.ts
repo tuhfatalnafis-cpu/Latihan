@@ -26,6 +26,7 @@ export interface GeneratedQuestion {
   question_type: 'multiple_choice' | 'matching' | 'fill_blank' | 'true_false' | 'flashcard';
   prompt: string;
   answer: string;
+  explanation?: string;
   distractors: string[];
   direction: 'term_to_meaning' | 'meaning_to_term' | 'ar_to_ms' | 'ms_to_ar' | 'general';
   source_vocab_id?: string;
@@ -103,6 +104,7 @@ function generateMCQBatch(library: VocabRow[], count: number, direction: 'term_t
       question_type: 'multiple_choice',
       prompt,
       answer,
+      explanation: `${vocab.term} bermaksud ${vocab.meaning}`,
       distractors,
       direction,
       source_vocab_id: vocab.id,
@@ -142,6 +144,7 @@ function generateFillBlankBatch(library: VocabRow[], count: number, direction: '
     question_type: 'fill_blank' as const,
     prompt: entry.direction === 'term_to_meaning' ? entry.vocab.term : entry.vocab.meaning,
     answer: entry.direction === 'term_to_meaning' ? entry.vocab.meaning : entry.vocab.term,
+    explanation: `${entry.vocab.term} bermaksud ${entry.vocab.meaning}`,
     distractors: [],
     direction: entry.direction,
     source_vocab_id: entry.vocab.id,
@@ -168,6 +171,7 @@ function generateTrueFalseBatch(library: VocabRow[], count: number, includeFalse
       question_type: 'true_false' as const,
       prompt: `Adakah '${vocab.term}' bermaksud '${statedMeaning}'?`,
       answer: isTrue ? 'true' : 'false',
+      explanation: `${vocab.term} bermaksud ${vocab.meaning}`,
       distractors: [],
       direction: 'term_to_meaning' as const,
       source_vocab_id: vocab.id,
@@ -188,6 +192,7 @@ function generateFlashcardBatch(library: VocabRow[], count: number): GeneratedQu
     question_type: 'flashcard' as const,
     prompt: v.term,
     answer: v.meaning,
+    explanation: `${v.term} bermaksud ${v.meaning}`,
     distractors: [],
     direction: 'term_to_meaning' as const,
     source_vocab_id: v.id,
