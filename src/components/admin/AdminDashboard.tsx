@@ -177,6 +177,13 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
                     <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Status Server</p>
                     <p className="text-sm font-black text-ink">Stabil</p>
                   </div>
+                  <div className="col-span-2 p-4 bg-white rounded-2xl border border-slate-100 text-left">
+                    <p className="text-[10px] font-black text-accent-lilac uppercase tracking-widest mb-2">Pasukan Pembangun</p>
+                    <div className="space-y-1">
+                      <p className="text-sm font-black text-ink">1. Dr Asyraf Saharudin</p>
+                      <p className="text-sm font-black text-ink">2. Dr Atikah</p>
+                    </div>
+                  </div>
                </div>
             </Card>
           </div>

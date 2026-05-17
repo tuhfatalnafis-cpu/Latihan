@@ -19,7 +19,7 @@ export default function AppInfoSettings() {
         const about = await db.settings.get('about_developer');
         const mission = await db.settings.get('our_mission');
         
-        setAboutDeveloper(about?.value || 'Kami adalah pasukan pembangun yang komited untuk merevolusi cara pembelajaran melalui teknologi AI Pintar.');
+        setAboutDeveloper(about?.value || 'Kami adalah pasukan pembangun yang komited untuk merevolusi cara pembelajaran melalui teknologi AI Pintar. Diterajui oleh Dr Asyraf Saharudin dan Dr Atikah.');
         setOurMission(mission?.value || 'Misi kami adalah untuk menjadikan pembelajaran mudah, menyeronokkan, dan boleh diakses oleh semua pelajar dengan bantuan kecerdasan buatan.');
       } catch (err) {
         console.error('Error loading settings:', err);

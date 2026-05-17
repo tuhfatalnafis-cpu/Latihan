@@ -32,9 +32,16 @@ export function AboutDeveloperCard() {
         </div>
         <div>
           <h4 className="font-black text-ink text-lg mb-2">Mengenai Pembangun</h4>
-          <p className="text-sm text-ink-muted leading-relaxed font-medium">
-            {loading ? 'Memuatkan...' : content}
-          </p>
+          <div className="text-sm text-ink-muted leading-relaxed font-bold space-y-1">
+            <p>{loading ? 'Memuatkan...' : content}</p>
+            {!loading && (
+              <div className="pt-3 border-t border-slate-100 flex flex-col gap-1">
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest">Pasukan Utama:</p>
+                <p className="text-ink">1. Dr Asyraf Saharudin</p>
+                <p className="text-ink">2. Dr Atikah</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Card>
