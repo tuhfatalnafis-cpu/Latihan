@@ -51,6 +51,19 @@ CREATE TABLE IF NOT EXISTS public.questions (
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+alter table public.questions 
+  drop constraint if exists questions_question_type_check;
+
+alter table public.questions 
+  add constraint questions_question_type_check 
+  check (question_type in (
+    'flashcard', 
+    'multiple_choice', 
+    'matching', 
+    'fill_blank', 
+    'true_false'
+  ));
+
 CREATE TABLE IF NOT EXISTS public.attempts (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   student_id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL,

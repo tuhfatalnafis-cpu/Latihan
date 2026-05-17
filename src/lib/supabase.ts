@@ -92,7 +92,7 @@ export interface Topic {
   created_at: string;
 }
 
-export type QuestionType = 'flashcard' | 'multiple_choice' | 'matching' | 'fill_blank';
+export type QuestionType = 'flashcard' | 'multiple_choice' | 'matching' | 'fill_blank' | 'true_false';
 
 export interface Question {
   id: string;

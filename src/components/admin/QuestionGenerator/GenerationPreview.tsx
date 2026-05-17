@@ -1,25 +1,25 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { GeneratedMCQ } from '../../../lib/questionGenerator';
+import { GeneratedQuestion } from '../../../lib/questionGenerator';
 import { SubjectFieldSchema } from '../../../lib/subjectPresets';
 import { getTermFontClass, isRTL } from '../../../lib/subjectHelpers';
-import { Trash2, RotateCcw, CheckCircle2, ChevronLeft, Loader2, Sparkles, Edit2, X, Save } from 'lucide-react';
+import { Trash2, RotateCcw, CheckCircle2, ChevronLeft, Loader2, Sparkles, Edit2, X, Save, FileText, LayoutGrid, CheckCircle } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/Button';
 
 interface Step2Props {
-  questions: GeneratedMCQ[];
+  questions: GeneratedQuestion[];
   schema: SubjectFieldSchema;
   isEnhancing: boolean;
   enhanceProgress: number;
-  onSave: (finalQuestions: GeneratedMCQ[]) => void;
+  onSave: (finalQuestions: GeneratedQuestion[]) => void;
   onBack: () => void;
 }
 
 export default function GenerationPreview({ questions, schema, isEnhancing, enhanceProgress, onSave, onBack }: Step2Props) {
-  const [items, setItems] = useState(questions);
+  const [items, setItems] = useState<GeneratedQuestion[]>(questions);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<GeneratedMCQ | null>(null);
+  const [editForm, setEditForm] = useState<GeneratedQuestion | null>(null);
 
   React.useEffect(() => {
     if (questions.length > 0) {
@@ -59,6 +59,27 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
 
   const isEmpty = items.length === 0 && !isEnhancing;
 
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'multiple_choice': return <CheckCircle2 className="w-3 h-3" />;
+      case 'matching': return <LayoutGrid className="w-3 h-3" />;
+      case 'fill_blank': return <FileText className="w-3 h-3" />;
+      case 'true_false': return <CheckCircle className="w-3 h-3" />;
+      default: return <RotateCcw className="w-3 h-3" />;
+    }
+  };
+
+  const getTypeName = (type: string) => {
+    switch (type) {
+      case 'multiple_choice': return 'MCQ';
+      case 'matching': return 'Padanan';
+      case 'fill_blank': return 'Isi Kosong';
+      case 'true_false': return 'Betul/Salah';
+      case 'flashcard': return 'Kad Imbas';
+      default: return type;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -77,9 +98,9 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
            </div>
            <div className="w-full h-2 bg-primary/10 rounded-full overflow-hidden">
              <motion.div 
-               initial={{ width: 0 }}
-               animate={{ width: `${enhanceProgress}%` }}
-               className="h-full bg-primary"
+                initial={{ width: 0 }}
+                animate={{ width: `${enhanceProgress}%` }}
+                className="h-full bg-primary"
              />
            </div>
            <p className="text-[10px] font-bold text-primary/60 text-center uppercase tracking-widest">Ini mungkin mengambil masa 5-10 saat</p>
@@ -97,8 +118,8 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
           <thead className="sticky top-0 bg-slate-50 border-b border-slate-100 z-10">
             <tr>
               <th className="p-4 text-[10px] font-black uppercase text-slate-400">#</th>
-              <th className="p-4 text-[10px] font-black uppercase text-slate-400">Soalan</th>
-              <th className="p-4 text-[10px] font-black uppercase text-slate-400">Jawapan (Pilihan Salah)</th>
+              <th className="p-4 text-[10px] font-black uppercase text-slate-400">Jenis</th>
+              <th className="p-4 text-[10px] font-black uppercase text-slate-400">Soalan / Kandungan</th>
               <th className="p-4 text-[10px] font-black uppercase text-slate-400 text-right">Tindakan</th>
             </tr>
           </thead>
@@ -113,59 +134,56 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
                     <td className="p-4" colSpan={2}>
                       <div className="space-y-4">
                         <div>
-                          <label className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1 block">Soalan / Prompt</label>
+                          <label className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1 block">Prompt Soalan</label>
                           <input 
                             value={editForm.prompt}
                             onChange={e => setEditForm({ ...editForm, prompt: e.target.value })}
-                            dir={isRTL(schema) && editForm.direction === 'term_to_meaning' ? 'rtl' : 'ltr'}
-                            className={cn(
-                              "w-full px-4 py-2 border-2 border-indigo-100 rounded-xl outline-none focus:border-indigo-500 font-bold",
-                              editForm.direction === 'term_to_meaning' 
-                                ? cn(getTermFontClass(schema), isRTL(schema) ? "text-3xl" : "text-base") 
-                                : "text-sm",
-                              isRTL(schema) && editForm.direction === 'term_to_meaning' && "text-right"
-                            )}
+                            className="w-full px-4 py-2 border-2 border-indigo-100 rounded-xl outline-none focus:border-indigo-500 font-bold"
                           />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1 block">Jawapan Betul</label>
-                            <input 
-                              value={editForm.answer}
-                              onChange={e => setEditForm({ ...editForm, answer: e.target.value })}
-                              dir={isRTL(schema) && editForm.direction === 'meaning_to_term' ? 'rtl' : 'ltr'}
-                              className={cn(
-                                "w-full px-4 py-2 border-2 border-emerald-100 rounded-xl outline-none focus:border-emerald-500 font-bold text-emerald-700",
-                                editForm.direction === 'meaning_to_term' 
-                                  ? cn(getTermFontClass(schema), isRTL(schema) ? "text-3xl" : "text-base") 
-                                  : "text-sm",
-                                isRTL(schema) && editForm.direction === 'meaning_to_term' && "text-right"
-                              )}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[9px] font-black uppercase tracking-widest text-rose-400 mb-1 block">Pilihan Salah (Distractors)</label>
-                            {editForm.distractors.map((d, di) => (
+                        
+                        {(editForm.question_type === 'multiple_choice' || editForm.question_type === 'fill_blank' || editForm.question_type === 'flashcard') && (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1 block">Jawapan</label>
                               <input 
-                                key={di}
-                                value={d}
-                                onChange={e => {
-                                  const newDistractors = [...editForm.distractors] as [string, string, string];
-                                  newDistractors[di] = e.target.value;
-                                  setEditForm({ ...editForm, distractors: newDistractors });
-                                }}
-                                dir={isRTL(schema) && editForm.direction === 'meaning_to_term' ? 'rtl' : 'ltr'}
-                                className={cn(
-                                  "w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-rose-400 text-slate-600",
-                                  editForm.direction === 'meaning_to_term' 
-                                    ? cn(getTermFontClass(schema), isRTL(schema) ? "text-xl" : "text-sm") 
-                                    : "text-xs font-bold",
-                                  isRTL(schema) && editForm.direction === 'meaning_to_term' && "text-right"
-                                )}
+                                value={editForm.answer}
+                                onChange={e => setEditForm({ ...editForm, answer: e.target.value })}
+                                className="w-full px-4 py-2 border-2 border-emerald-100 rounded-xl outline-none focus:border-emerald-500 font-bold text-emerald-700 text-sm"
                               />
-                            ))}
+                            </div>
+                            {editForm.question_type === 'multiple_choice' && editForm.distractors && (
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black uppercase tracking-widest text-rose-400 mb-1 block">Distraktor</label>
+                                {editForm.distractors.map((d, di) => (
+                                  <input 
+                                    key={di}
+                                    value={d}
+                                    onChange={e => {
+                                      const newDistractors = [...editForm.distractors!];
+                                      newDistractors[di] = e.target.value;
+                                      setEditForm({ ...editForm, distractors: newDistractors });
+                                    }}
+                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-rose-400 text-slate-600 text-xs font-bold"
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        </div>
+                        )}
+                        
+                        {editForm.question_type === 'true_false' && (
+                          <div className="grid grid-cols-1 gap-2">
+                             <label className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Kenyataan:</label>
+                             <div className="text-xs font-bold bg-white p-2 border border-indigo-100 rounded-lg">
+                               {editForm.metadata?.term} bermaksud {editForm.metadata?.stated_meaning}
+                             </div>
+                             <div className="flex gap-2">
+                               <Button size="sm" onClick={() => setEditForm({...editForm, answer: 'true'})} className={cn(editForm.answer === 'true' && "bg-emerald-500")}>BETUL</Button>
+                               <Button size="sm" onClick={() => setEditForm({...editForm, answer: 'false'})} className={cn(editForm.answer === 'false' && "bg-rose-500")}>SALAH</Button>
+                             </div>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="p-4 text-right">
@@ -194,30 +212,70 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
                 <tr key={i} className="hover:bg-slate-50 transition-colors group">
                   <td className="p-4 text-[10px] font-black text-slate-300">{(i + 1).toString().padStart(2, '0')}</td>
                   <td className="p-4">
-                    <div 
-                      dir={isRTL(schema) && q.direction === 'term_to_meaning' ? 'rtl' : 'ltr'}
-                      className={cn("leading-tight", q.direction === 'term_to_meaning' ? cn(getTermFontClass(schema), isRTL(schema) ? "text-3xl" : "text-base font-bold text-slate-800") : "text-sm font-bold text-slate-800", isRTL(schema) && q.direction === 'term_to_meaning' && "text-right")}
-                    >
-                      {q.prompt}
-                    </div>
-                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                      {q.direction === 'term_to_meaning' ? `${schema.term_label} → ${schema.meaning_label}` : `${schema.meaning_label} → ${schema.term_label}`}
-                    </div>
+                     <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg text-slate-500">
+                        {getTypeIcon(q.question_type)}
+                        <span className="text-[10px] font-black uppercase leading-none">{getTypeName(q.question_type)}</span>
+                     </div>
                   </td>
                   <td className="p-4">
-                    <div 
-                      dir={isRTL(schema) && q.direction === 'meaning_to_term' ? 'rtl' : 'ltr'}
-                      className={cn("font-black", q.direction === 'meaning_to_term' ? cn(getTermFontClass(schema), isRTL(schema) ? "text-3xl text-emerald-600" : "text-base text-emerald-600") : "text-sm text-emerald-600", isRTL(schema) && q.direction === 'meaning_to_term' && "text-right")}
-                    >
-                      {q.answer}
-                    </div>
-                    <div className={cn("flex gap-2 flex-wrap mt-2", isRTL(schema) && q.direction === 'meaning_to_term' && "justify-end")}>
-                      {q.distractors.map((d, di) => (
-                        <span key={di} className={cn("px-2 py-0.5 bg-slate-100 text-slate-400 rounded-md", q.direction === 'meaning_to_term' ? cn(getTermFontClass(schema), isRTL(schema) ? "text-lg" : "text-xs") : "text-[10px] font-bold")}>
-                          {d}
-                        </span>
-                      ))}
-                    </div>
+                    {q.question_type === 'multiple_choice' && (
+                      <div className="flex flex-col gap-1">
+                        <div className={cn("text-sm font-bold text-ink", isRTL(schema) && q.direction === 'term_to_meaning' && getTermFontClass(schema))}>
+                          {q.prompt}
+                        </div>
+                        <div className="flex gap-2 flex-wrap text-xs">
+                          <span className="text-emerald-600 font-bold underline bg-emerald-50 px-1 rounded">{q.answer}</span>
+                          {q.distractors?.map((d, di) => (
+                            <span key={di} className="text-slate-400 italic">{d}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {q.question_type === 'matching' && (
+                      <div className="flex flex-col gap-1">
+                        <div className="text-xs font-bold text-ink mb-1">Padankan {q.metadata?.pairs?.length || 0} pasangan:</div>
+                        <div className="flex flex-wrap gap-2">
+                           {q.metadata?.pairs?.slice(0, 3).map((p: any, idx: number) => (
+                             <div key={idx} className="text-[10px] bg-slate-50 border px-2 py-1 rounded flex gap-1">
+                               <span className="font-bold text-primary">{p.left}</span>
+                               <span className="text-slate-300">↔</span>
+                               <span className="text-slate-600 font-bold">{p.right}</span>
+                             </div>
+                           ))}
+                           {(q.metadata?.pairs?.length || 0) > 3 && <span className="text-[10px] text-slate-300 flex items-center">+{q.metadata?.pairs?.length - 3} lagi</span>}
+                        </div>
+                      </div>
+                    )}
+
+                    {q.question_type === 'fill_blank' && (
+                      <div className="flex flex-col gap-1">
+                        <div className="text-xs font-bold text-ink">
+                          {q.prompt}
+                        </div>
+                        <div className="text-xs text-emerald-600 font-bold underline">
+                          Jawapan: {q.answer}
+                        </div>
+                      </div>
+                    )}
+
+                    {q.question_type === 'true_false' && (
+                      <div className="flex flex-col gap-1">
+                        <div className="text-xs font-bold text-ink italic">
+                          "{q.metadata?.term} bermaksud {q.metadata?.stated_meaning}"
+                        </div>
+                        <div className={cn("text-[10px] font-black uppercase tracking-widest", q.answer === 'true' ? "text-emerald-500" : "text-rose-500")}>
+                          {q.answer === 'true' ? 'Betul' : 'Salah'}
+                        </div>
+                      </div>
+                    )}
+
+                    {q.question_type === 'flashcard' && (
+                      <div className="flex flex-col gap-1">
+                        <div className={cn("text-sm font-bold text-ink", isRTL(schema) && getTermFontClass(schema))}>{q.prompt}</div>
+                        <div className="text-xs text-primary font-bold">Maksud: {q.answer}</div>
+                      </div>
+                    )}
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, BrainCircuit, Loader2 } from 'lucide-react';
 import GenerationConfig from './GenerationConfig';
 import GenerationPreview from './GenerationPreview';
-import { VocabRow, GenConfig, GeneratedMCQ, generateMCQs } from '../../../lib/questionGenerator';
+import { VocabRow, GenConfig, GeneratedQuestion, generateQuestions } from '../../../lib/questionGenerator';
 import { SubjectFieldSchema } from '../../../lib/subjectPresets';
 import { generateQuestionsWithFiles } from '../../../lib/aiQuestionService';
 import { enhanceDistractors } from '../../../lib/aiQuestionEnhancer';
@@ -22,17 +22,11 @@ interface QuestionGeneratorProps {
 export default function QuestionGenerator({ topicId, schema, userId, library, onClose, onComplete }: QuestionGeneratorProps) {
   const [step, setStep] = useState(1);
   const [config, setConfig] = useState<{ name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string; files?: { data: string; mimeType: string }[] } & GenConfig | null>(null);
-  const [questions, setQuestions] = useState<GeneratedMCQ[]>([]);
+  const [questions, setQuestions] = useState<GeneratedQuestion[]>([]);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhanceProgress, setEnhanceProgress] = useState(0);
 
   const handleConfigComplete = async (newConfig: { name: string; strategy: 'random' | 'ai' | 'pure_ai'; prompt?: string; files?: { data: string; mimeType: string }[] } & GenConfig) => {
-    console.log('[QuestionGenerator] Start generation with config:', { 
-      name: newConfig.name, 
-      strategy: newConfig.strategy, 
-      fileCount: newConfig.files?.length,
-      prompt: newConfig.prompt 
-    });
     setConfig(newConfig);
     setStep(2);
     
@@ -40,12 +34,9 @@ export default function QuestionGenerator({ topicId, schema, userId, library, on
       setIsEnhancing(true);
       setEnhanceProgress(10);
       try {
-        console.log('[QuestionGenerator] Calling AI service...');
         const aiQuestions = await generateQuestionsWithFiles(newConfig.prompt || '', newConfig.files || [], newConfig.count);
-        console.log('[QuestionGenerator] AI service returned:', aiQuestions.length, 'questions');
         setQuestions(aiQuestions);
       } catch (err: any) {
-        console.error('[QuestionGenerator] AI Generation Error:', err);
         toast.error('Gagal menjana soalan AI: ' + err.message);
         setStep(1);
       } finally {
@@ -55,7 +46,7 @@ export default function QuestionGenerator({ topicId, schema, userId, library, on
       return;
     }
 
-    const initialQuestions = generateMCQs(library, newConfig);
+    const initialQuestions = generateQuestions(library, newConfig);
     setQuestions(initialQuestions);
 
     if (newConfig.strategy === 'ai') {
@@ -64,10 +55,13 @@ export default function QuestionGenerator({ topicId, schema, userId, library, on
       
       for (let i = 0; i < enhanced.length; i++) {
         setEnhanceProgress((i / enhanced.length) * 100);
-        const distractors = await enhanceDistractors(enhanced[i], library);
-        if (distractors) {
-          enhanced[i] = { ...enhanced[i], distractors: distractors as [string, string, string] };
-          setQuestions([...enhanced]); // Live update preview if possible
+        // Only enhance MCQs
+        if (enhanced[i].question_type === 'multiple_choice') {
+           const distractors = await enhanceDistractors(enhanced[i] as any, library);
+           if (distractors) {
+             enhanced[i] = { ...enhanced[i], distractors: distractors as string[] };
+             setQuestions([...enhanced]);
+           }
         }
       }
       
@@ -76,7 +70,7 @@ export default function QuestionGenerator({ topicId, schema, userId, library, on
     }
   };
 
-  const handleSave = async (finalQuestions: GeneratedMCQ[]) => {
+  const handleSave = async (finalQuestions: GeneratedQuestion[]) => {
     if (!config) return;
 
     try {
@@ -86,17 +80,20 @@ export default function QuestionGenerator({ topicId, schema, userId, library, on
           direction: q.direction,
           generation_method: config.strategy === 'pure_ai' ? 'pure_ai' : (config.strategy === 'ai' ? 'ai_enhanced' : 'random'),
           source_vocab_id: q.source_vocab_id,
-          image_keyword: q.metadata.image_keyword,
+          image_keyword: q.metadata?.image_keyword,
+          pairs: q.metadata?.pairs,
+          term: q.metadata?.term,
+          stated_meaning: q.metadata?.stated_meaning,
+          actual_meaning: q.metadata?.actual_meaning,
         };
 
-        // Preserve extra fields in metadata for rendering
         schema?.extra_fields?.forEach(f => {
           if (q.metadata?.[f.key]) metadata[f.key] = q.metadata[f.key];
         });
 
         return {
           topic_id: topicId,
-          question_type: 'multiple_choice' as const,
+          question_type: q.question_type,
           prompt: q.prompt,
           answer: q.answer,
           distractors: q.distractors,

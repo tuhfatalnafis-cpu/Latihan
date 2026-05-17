@@ -1,7 +1,7 @@
-import { GeneratedMCQ, VocabRow } from "./questionGenerator";
+import { GeneratedQuestion, VocabRow } from "./questionGenerator";
 
 export async function enhanceDistractors(
-  question: GeneratedMCQ,
+  question: GeneratedQuestion,
   library: VocabRow[]
 ): Promise<string[] | null> {
   try {

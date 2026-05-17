@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { BrainCircuit, ChevronRight, AlertCircle, Sparkles, Database, Upload, FileText, ImageIcon, X, Loader2, Plus } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { GenConfig } from '../../../lib/questionGenerator';
@@ -14,29 +14,33 @@ interface Step1Props {
 }
 
 export default function GenerationConfig({ libSize, schema, onNext, onCancel }: Step1Props) {
-  const [name, setName] = useState('');
-  const [count, setCount] = useState(libSize > 0 ? Math.min(20, libSize) : 20);
-  const [direction, setDirection] = useState<'term_to_meaning' | 'meaning_to_term' | 'both' | 'general'>('both');
-  const [strategy, setStrategy] = useState<'random' | 'ai' | 'pure_ai'>(libSize > 0 ? 'random' : 'pure_ai');
+  const [formats, setFormats] = useState<('multiple_choice' | 'matching' | 'fill_blank' | 'true_false' | 'flashcard')[]>(['multiple_choice']);
+  const [direction, setDirection] = useState<'term_to_meaning' | 'meaning_to_term' | 'both'>('both');
   const [prompt, setPrompt] = useState('');
   const [files, setFiles] = useState<{ data: string; mimeType: string, name: string }[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [matchingPairs, setMatchingPairs] = useState(6);
+  const [includeFalse, setIncludeFalse] = useState(true);
+  const [count, setCount] = useState(libSize > 0 ? Math.min(20, libSize) : 20);
+  const [strategy, setStrategy] = useState<'random' | 'ai' | 'pure_ai'>(libSize > 0 ? 'random' : 'pure_ai');
 
   const hasAIKey = !!process.env.GEMINI_API_KEY;
+
+  const toggleFormat = (f: any) => {
+    setFormats(prev => prev.includes(f) ? (prev.length > 1 ? prev.filter(x => x !== f) : prev) : [...prev, f]);
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles) return;
 
-    console.log('[QuestionGenerator] Files selected:', selectedFiles.length);
     setIsUploading(true);
     const newFiles: { data: string; mimeType: string, name: string }[] = [];
 
     for (let i = 0; i < selectedFiles.length; i++) {
        const file = selectedFiles[i];
-       console.log(`[QuestionGenerator] Processing file: ${file.name} (${file.type}, ${file.size} bytes)`);
-       
        if (file.size > 10 * 1024 * 1024) {
          toast.error(`Fail ${file.name} terlalu besar (max 10MB)`);
          continue;
@@ -46,7 +50,6 @@ export default function GenerationConfig({ libSize, schema, onNext, onCancel }: 
        const promise = new Promise<void>((resolve) => {
          reader.onload = (e) => {
            if (e.target?.result) {
-             console.log(`[QuestionGenerator] File read success: ${file.name}`);
              newFiles.push({
                data: e.target.result as string,
                mimeType: file.type,
@@ -56,7 +59,6 @@ export default function GenerationConfig({ libSize, schema, onNext, onCancel }: 
            resolve();
          };
          reader.onerror = (err) => {
-           console.error(`[QuestionGenerator] File read error: ${file.name}`, err);
            toast.error(`Gagal membaca fail ${file.name}`);
            resolve();
          };
@@ -69,7 +71,6 @@ export default function GenerationConfig({ libSize, schema, onNext, onCancel }: 
     setIsUploading(false);
     if (strategy !== 'pure_ai') {
       setStrategy('pure_ai');
-      console.log('[QuestionGenerator] Strategy auto-switched to pure_ai');
     }
   };
 
@@ -82,13 +83,23 @@ export default function GenerationConfig({ libSize, schema, onNext, onCancel }: 
     
     if (strategy !== 'pure_ai') {
       if (libSize < 4) return setError('Pustaka memerlukan sekurang-kurangnya 4 perkataan.');
-      if (count > libSize * 2) return setError(`Bilangan soalan tidak boleh melebihi ${libSize * 2} (2x saiz pustaka).`);
+      // if (count > libSize * 2) return setError(`Bilangan soalan tidak boleh melebihi ${libSize * 2} (2x saiz pustaka).`);
     } else {
       if (!prompt.trim() && files.length === 0) return setError('Sila masukkan topik atau muat naik fail untuk AI.');
     }
     
     setError(null);
-    onNext({ name, count, direction, strategy, prompt, files: files.map(f => ({ data: f.data, mimeType: f.mimeType })) });
+    onNext({ 
+      name, 
+      count, 
+      formats,
+      direction, 
+      matching_pairs_count: matchingPairs,
+      include_false_variants: includeFalse,
+      strategy, 
+      prompt, 
+      files: files.map(f => ({ data: f.data, mimeType: f.mimeType })) 
+    });
   };
 
   return (
@@ -99,56 +110,117 @@ export default function GenerationConfig({ libSize, schema, onNext, onCancel }: 
       </div>
 
       <div className="space-y-6">
-        {/* Set Name */}
-        <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Nama Set Soalan</label>
-          <input 
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Contoh: Set Latihan 1, Ujian Bulanan..."
-            className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold text-slate-800 outline-none focus:border-indigo-100 focus:bg-white transition-all"
-          />
-        </div>
-
-        {/* Count */}
-        <div>
-          <div className="flex justify-between items-center mb-2">
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Bilangan Soalan</label>
-            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black">{count} / {libSize * 2}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Set Name */}
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Nama Set Soalan</label>
+            <input 
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Contoh: Set Latihan 1..."
+              className="w-full px-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold text-slate-800 outline-none focus:border-indigo-100 focus:bg-white transition-all"
+            />
           </div>
-          <input 
-            type="range" 
-            min="1" 
-            max={libSize * 2}
-            value={count}
-            onChange={(e) => setCount(parseInt(e.target.value))}
-            className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-          />
+
+          {/* Count */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Bilangan Soalan</label>
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black">{count}</span>
+            </div>
+            <input 
+              type="range" 
+              min="5" 
+              max="50"
+              step="5"
+              value={count}
+              onChange={(e) => setCount(parseInt(e.target.value))}
+              className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            />
+          </div>
         </div>
 
-        {/* Direction */}
+        {/* Format Selector */}
         <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Arah atau Jenis Soalan</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Format Soalan (Pilih satu atau lebih)</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {[
-              { id: 'term_to_meaning', label: `${schema.term_label} → ${schema.meaning_label}`, hidden: strategy === 'random' && libSize < 1 },
-              { id: 'meaning_to_term', label: `${schema.meaning_label} → ${schema.term_label}`, hidden: strategy === 'random' && libSize < 1 },
-              { id: 'both', label: `Kombinasi Kedua-dua Arah`, hidden: strategy === 'random' },
-              { id: 'general', label: 'Umum / Pemahaman (AI)', hidden: strategy !== 'pure_ai' }
-            ].filter(d => !d.hidden).map(dir => (
+              { id: 'multiple_choice', label: 'Aneka Pilihan (MCQ)' },
+              { id: 'matching', label: 'Padanan', disabled: libSize < 4 },
+              { id: 'fill_blank', label: 'Isi Tempat Kosong' },
+              { id: 'true_false', label: 'Betul / Salah' },
+              { id: 'flashcard', label: 'Imbas Kad (Flashcard)' }
+            ].map(f => (
               <button
-                key={dir.id}
-                onClick={() => setDirection(dir.id as any)}
+                key={f.id}
+                disabled={f.disabled}
+                onClick={() => toggleFormat(f.id)}
                 className={cn(
-                  "py-3 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all",
-                  direction === dir.id ? "bg-indigo-50 border-indigo-600 text-indigo-600 shadow-sm" : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+                  "py-3 px-2 rounded-xl border-2 font-black text-[9px] uppercase tracking-widest transition-all h-full flex items-center justify-center text-center",
+                  formats.includes(f.id as any) ? "bg-indigo-50 border-indigo-600 text-indigo-600 shadow-sm" : "bg-white border-slate-100 text-slate-400 hover:border-slate-200",
+                  f.disabled && "opacity-50 cursor-not-allowed"
                 )}
               >
-                {dir.label}
+                {f.label}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Dynamic Config Based on Formats */}
+        <AnimatePresence>
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="space-y-4 p-4 bg-slate-50 rounded-3xl"
+          >
+            {/* Direction (MCQ, Fill Blank) */}
+            {(formats.includes('multiple_choice') || formats.includes('fill_blank')) && (
+              <div className="space-y-2">
+                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Arah Soalan</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'term_to_meaning', label: `${schema.term_label} → Maksud` },
+                    { id: 'meaning_to_term', label: `Maksud → ${schema.term_label}` },
+                    { id: 'both', label: `Kombinasi` }
+                  ].map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => setDirection(d.id as any)}
+                      className={cn(
+                        "flex-1 py-2 px-3 rounded-xl border font-black text-[9px] uppercase tracking-widest transition-all",
+                        direction === d.id ? "bg-white border-indigo-600 text-indigo-600 shadow-sm" : "bg-transparent border-slate-200 text-slate-400 hover:border-slate-300"
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Matching Config */}
+            {formats.includes('matching') && (
+              <div className="space-y-2">
+                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Bilangan Padanan (Setiap Soalan)</label>
+                <div className="flex gap-2">
+                  {[4, 6, 8].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setMatchingPairs(n)}
+                      className={cn(
+                        "flex-1 py-1 rounded-lg border font-black text-[10px] transition-all",
+                        matchingPairs === n ? "bg-white border-indigo-600 text-indigo-600 shadow-sm" : "bg-transparent border-slate-200 text-slate-400 hover:border-slate-300"
+                      )}
+                    >
+                      {n} Pasangan
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
 
         {/* Strategy */}
         <div>

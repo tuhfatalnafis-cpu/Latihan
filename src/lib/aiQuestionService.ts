@@ -1,9 +1,9 @@
-import { GeneratedMCQ } from "./questionGenerator";
+import { GeneratedQuestion } from "./questionGenerator";
 
 export async function generateQuestionsFromPrompt(
   prompt: string, 
   count: number = 20
-): Promise<GeneratedMCQ[]> {
+): Promise<GeneratedQuestion[]> {
   return generateQuestionsWithFiles(prompt, [], count);
 }
 
@@ -11,7 +11,7 @@ export async function generateQuestionsWithFiles(
   prompt: string,
   files: { data: string; mimeType: string }[],
   count: number = 20
-): Promise<GeneratedMCQ[]> {
+): Promise<GeneratedQuestion[]> {
   try {
     const response = await fetch("/api/generate-questions", {
       method: "POST",
@@ -29,12 +29,13 @@ export async function generateQuestionsWithFiles(
     const data = await response.json();
     
     return data.map((q: any) => ({
+      question_type: q.question_type || 'multiple_choice',
       prompt: q.prompt,
       answer: q.answer,
-      distractors: (q.distractors || []).slice(0, 3) as [string, string, string],
+      distractors: q.distractors,
       direction: q.direction || 'general',
       source_vocab_id: undefined,
-      metadata: {
+      metadata: q.metadata || {
         transliteration: q.transliteration || "",
         image_keyword: q.image_keyword || ""
       }
