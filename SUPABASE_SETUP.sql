@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   role text CHECK (role IN ('admin', 'student')) DEFAULT 'student',
   full_name text,
+  gender text,
   grade text,
+  metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

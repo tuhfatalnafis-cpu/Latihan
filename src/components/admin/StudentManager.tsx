@@ -14,7 +14,10 @@ import {
   TrendingUp,
   BarChart2,
   Loader2,
-  UserCheck
+  UserCheck,
+  Flame,
+  Award,
+  Target
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { db } from '../../lib/db';
@@ -40,12 +43,44 @@ export default function StudentManager() {
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [studentStats, setStudentStats] = useState<Record<string, { activeTopics: number, accuracy: number }>>({});
+  const [studentStats, setStudentStats] = useState<Record<string, { 
+    activeTopics: number, 
+    accuracy: number,
+    streak: number,
+    totalAttempts: number
+  }>>({});
   const [globalStudentStats, setGlobalStudentStats] = useState({ trend: 0, avgAccuracy: 0 });
 
   useEffect(() => {
     fetchStudents();
   }, []);
+
+  const calculateStreak = (answeredDates: string[]): number => {
+    if (answeredDates.length === 0) return 0;
+    
+    const uniqueDays = Array.from(new Set(answeredDates.map(d => d.split('T')[0])))
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    if (uniqueDays[0] !== today && uniqueDays[0] !== yesterday) return 0;
+    
+    let streak = 1;
+    let current = uniqueDays[0];
+    
+    for (let i = 1; i < uniqueDays.length; i++) {
+      const expectedPrev = new Date(new Date(current).getTime() - 86400000).toISOString().split('T')[0];
+      if (uniqueDays[i] === expectedPrev) {
+        streak++;
+        current = expectedPrev;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
 
   const fetchStudents = async () => {
     setLoading(true);
@@ -64,19 +99,35 @@ export default function StudentManager() {
         .from('progress')
         .select('student_id, question_id, consecutive_correct, questions(topic_id)');
       
-      const stats: Record<string, { activeTopics: number, accuracy: number }> = {};
+      // Fetch all attempts to calculate accuracy and streak
+      const { data: attemptsData } = await supabase
+        .from('attempts')
+        .select('student_id, is_correct, answered_at');
+
+      const stats: Record<string, { activeTopics: number, accuracy: number, streak: number, totalAttempts: number }> = {};
       const studentAccuracies: number[] = [];
 
       data.forEach(s => {
         const studentProgress = progressData?.filter(p => p.student_id === s.id) || [];
+        const studentAttempts = attemptsData?.filter(a => a.student_id === s.id) || [];
+        
         const uniqueTopics = new Set(studentProgress.map(p => (p.questions as any)?.topic_id)).size;
         
-        // accuracy heuristic: mastered questions / total attempted questions in progress
-        const mastered = studentProgress.filter(p => p.consecutive_correct >= 3).length;
-        const accuracy = studentProgress.length > 0 ? Math.round((mastered / studentProgress.length) * 100) : 0;
+        // Overall accuracy from attempts
+        const correctAttempts = studentAttempts.filter(a => a.is_correct).length;
+        const accuracy = studentAttempts.length > 0 ? Math.round((correctAttempts / studentAttempts.length) * 100) : 0;
         
-        stats[s.id] = { activeTopics: uniqueTopics, accuracy };
-        if (studentProgress.length > 0) studentAccuracies.push(accuracy);
+        // Streak calculation
+        const streak = calculateStreak(studentAttempts.map(a => a.answered_at));
+        
+        stats[s.id] = { 
+          activeTopics: uniqueTopics, 
+          accuracy,
+          streak,
+          totalAttempts: studentAttempts.length
+        };
+        
+        if (studentAttempts.length > 0) studentAccuracies.push(accuracy);
       });
 
       setStudentStats(stats);
@@ -85,7 +136,7 @@ export default function StudentManager() {
         ? Math.round(studentAccuracies.reduce((a, b) => a + b, 0) / studentAccuracies.length) 
         : 0;
       
-      setGlobalStudentStats({ trend: 15, avgAccuracy: avgAcc }); // Trend can be static for now or calculated if preferred
+      setGlobalStudentStats({ trend: 15, avgAccuracy: avgAcc });
     } catch (err) {
       console.error('Fetch error:', err);
       toast.error('Gagal memuatkan senarai pelajar');
@@ -287,16 +338,28 @@ export default function StudentManager() {
                          <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mt-1">
                             {s.gender === 'female' || s.metadata?.gender === 'female' ? 'Pelajar Perempuan' : s.gender === 'male' || s.metadata?.gender === 'male' ? 'Pelajar Lelaki' : 'Jantina Belum Ditetapkan'}
                          </p>
-                         <div className="flex items-center gap-4 mt-2">
-                           <p className="text-ink-muted text-xs font-bold flex items-center gap-1.5">
+                         <div className="flex flex-wrap items-center gap-3 mt-3">
+                           <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
                              <GraduationCap className="w-3.5 h-3.5 text-accent-warm" />
-                             Gred {s.grade || 'N/A'}
-                           </p>
-                           <span className="w-1 h-1 bg-slate-200 rounded-full" />
-                           <p className="text-ink-muted text-xs font-bold flex items-center gap-1.5">
-                             <TrendingUp className="w-3.5 h-3.5 text-accent-mint" />
-                             Aktif: {studentStats[s.id]?.activeTopics || 0} Topik
-                           </p>
+                             <span className="text-ink-muted text-[10px] font-black uppercase tracking-wider">Gred {s.grade || 'N/A'}</span>
+                           </div>
+                           
+                           <div className="flex items-center gap-1.5 bg-accent-mint/10 px-3 py-1 rounded-full border border-accent-mint/20">
+                             <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                             <span className="text-emerald-700 text-[10px] font-black uppercase tracking-wider">{studentStats[s.id]?.activeTopics || 0} Topik</span>
+                           </div>
+
+                           <div className="flex items-center gap-1.5 bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                             <Target className="w-3.5 h-3.5 text-primary" />
+                             <span className="text-primary text-[10px] font-black uppercase tracking-wider">{studentStats[s.id]?.accuracy || 0}% Akurasi</span>
+                           </div>
+
+                           {studentStats[s.id]?.streak > 0 && (
+                             <div className="flex items-center gap-1.5 bg-rose-50 px-3 py-1 rounded-full border border-rose-100">
+                               <Flame className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                               <span className="text-rose-600 text-[10px] font-black uppercase tracking-wider">{studentStats[s.id]?.streak} Hari</span>
+                             </div>
+                           )}
                          </div>
                        </div>
                     </div>
