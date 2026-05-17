@@ -26,33 +26,45 @@ export default function TrueFalseMode({ question, schema, onAnswer }: TrueFalseM
 
   return (
     <div className="w-full max-w-2xl px-4 flex flex-col items-center animate-in slide-in-from-bottom-8 duration-500">
-      <Card className="mb-12 w-full text-center relative overflow-hidden p-12 bg-white" padding="lg">
+      <Card className="mb-12 w-full text-center relative overflow-hidden p-0 bg-white" padding="none">
          <div className="flex flex-col items-center">
-           <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-primary mb-8">
-              <span className="font-black">?</span>
-           </div>
-           
-           <div className="flex flex-col items-center gap-6">
-              <span className={cn(
-                "font-black text-ink leading-tight", 
-                showRTL ? cn(getTermFontClass(schema), "text-5xl") : "text-4xl"
-              )} dir={showRTL ? "rtl" : "ltr"}>
-                {question.metadata.term}
-              </span>
-              
-              <div className="flex items-center gap-4 w-full">
-                <div className="h-0.5 flex-1 bg-slate-100" />
-                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">bermaksud</span>
-                <div className="h-0.5 flex-1 bg-slate-100" />
-              </div>
-              
-              <span className="text-4xl font-black text-primary">
-                {question.metadata.stated_meaning}
-              </span>
+           {question.metadata.image_url && (
+             <div className="w-full h-48 md:h-56 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100">
+               <img 
+                 src={question.metadata.image_url} 
+                 alt="Soalan" 
+                 className="w-full h-full object-contain"
+                 referrerPolicy="no-referrer"
+               />
+             </div>
+           )}
+           <div className="p-10 md:p-12 flex flex-col items-center w-full">
+             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-primary mb-8">
+               <span className="font-black">?</span>
+             </div>
+             
+             <div className="flex flex-col items-center gap-6">
+                <span className={cn(
+                  "font-black text-ink leading-tight", 
+                  showRTL ? cn(getTermFontClass(schema), "text-5xl") : "text-4xl"
+                )} dir={showRTL ? "rtl" : "ltr"}>
+                  {question.metadata.term}
+                </span>
+                
+                <div className="flex items-center gap-4 w-full">
+                  <div className="h-0.5 flex-1 bg-slate-100" />
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">bermaksud</span>
+                  <div className="h-0.5 flex-1 bg-slate-100" />
+                </div>
+                
+                <span className="text-4xl font-black text-primary">
+                  {question.metadata.stated_meaning}
+                </span>
+             </div>
            </div>
          </div>
          
-         <div className="mt-12 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+         <div className="pb-10 text-[10px] font-black text-slate-400 uppercase tracking-widest">
             Adakah pernyataan di atas betul?
          </div>
       </Card>

@@ -1,25 +1,29 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { GeneratedQuestion } from '../../../lib/questionGenerator';
 import { SubjectFieldSchema } from '../../../lib/subjectPresets';
 import { getTermFontClass, isRTL } from '../../../lib/subjectHelpers';
-import { Trash2, RotateCcw, CheckCircle2, ChevronLeft, Loader2, Sparkles, Edit2, X, Save, FileText, LayoutGrid, CheckCircle } from 'lucide-react';
+import { Trash2, RotateCcw, CheckCircle2, ChevronLeft, Loader2, Sparkles, Edit2, X, Save, FileText, LayoutGrid, CheckCircle, Image as ImageIcon } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Button } from '../../ui/Button';
+import QuestionEditor from '../QuestionEditor';
+import { enhanceDistractors } from '../../../lib/aiQuestionEnhancer';
+import { toast } from 'sonner';
 
 interface Step2Props {
   questions: GeneratedQuestion[];
   schema: SubjectFieldSchema;
+  library?: any[]; // for distractor regeneration
   isEnhancing: boolean;
   enhanceProgress: number;
   onSave: (finalQuestions: GeneratedQuestion[]) => void;
   onBack: () => void;
 }
 
-export default function GenerationPreview({ questions, schema, isEnhancing, enhanceProgress, onSave, onBack }: Step2Props) {
+export default function GenerationPreview({ questions, schema, library = [], isEnhancing, enhanceProgress, onSave, onBack }: Step2Props) {
   const [items, setItems] = useState<GeneratedQuestion[]>(questions);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<GeneratedQuestion | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState<number | null>(null);
 
   React.useEffect(() => {
     if (questions.length > 0) {
@@ -31,29 +35,37 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
     setItems(items.filter((_, i) => i !== index));
     if (editingIndex === index) {
       setEditingIndex(null);
-      setEditForm(null);
-    } else if (editingIndex !== null && editingIndex > index) {
-      setEditingIndex(editingIndex - 1);
     }
   };
 
-  const startEditing = (index: number) => {
-    setEditingIndex(index);
-    setEditForm({ ...items[index] });
+  const handleRegenerateDistractors = async (index: number) => {
+    const question = items[index];
+    if (question.question_type !== 'multiple_choice') return;
+
+    try {
+      setIsRegenerating(index);
+      const newDistractors = await enhanceDistractors(question as any, library);
+      if (newDistractors) {
+        const newItems = [...items];
+        newItems[index] = { ...question, distractors: newDistractors };
+        setItems(newItems);
+        toast.success('Distraktor berjaya dijana semula!');
+      } else {
+        toast.error('Gagal menjana semula distraktor');
+      }
+    } catch (err) {
+      toast.error('Ralat teknikal semasa menjana distraktor');
+    } finally {
+      setIsRegenerating(null);
+    }
   };
 
-  const cancelEditing = () => {
-    setEditingIndex(null);
-    setEditForm(null);
-  };
-
-  const saveEdit = () => {
-    if (editingIndex !== null && editForm) {
+  const saveEdit = (updatedQuestion: any) => {
+    if (editingIndex !== null) {
       const newItems = [...items];
-      newItems[editingIndex] = editForm;
+      newItems[editingIndex] = updatedQuestion;
       setItems(newItems);
       setEditingIndex(null);
-      setEditForm(null);
     }
   };
 
@@ -89,6 +101,7 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
 
       {isEnhancing && (
         <div className="bg-primary/5 border border-primary/10 p-6 rounded-[32px] space-y-4">
+           {/* ... existing loading ... */}
            <div className="flex items-center justify-between">
              <div className="flex items-center gap-3">
                <Loader2 className="w-5 h-5 text-primary animate-spin" />
@@ -124,102 +137,9 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {items.map((q, i) => {
-              const isEditing = editingIndex === i;
-              
-              if (isEditing && editForm) {
-                return (
-                  <tr key={i} className="bg-indigo-50/30">
-                    <td className="p-4 text-[10px] font-black text-indigo-300">{(i + 1).toString().padStart(2, '0')}</td>
-                    <td className="p-4" colSpan={2}>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1 block">Prompt Soalan</label>
-                          <input 
-                            value={editForm.prompt}
-                            onChange={e => setEditForm({ ...editForm, prompt: e.target.value })}
-                            className="w-full px-4 py-2 border-2 border-indigo-100 rounded-xl outline-none focus:border-indigo-500 font-bold"
-                          />
-                        </div>
-                        
-                        {(editForm.question_type === 'multiple_choice' || editForm.question_type === 'fill_blank' || editForm.question_type === 'flashcard') && (
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-1 block">Jawapan</label>
-                              <input 
-                                value={editForm.answer}
-                                onChange={e => setEditForm({ ...editForm, answer: e.target.value })}
-                                className="w-full px-4 py-2 border-2 border-emerald-100 rounded-xl outline-none focus:border-emerald-500 font-bold text-emerald-700 text-sm"
-                              />
-                            </div>
-                            {editForm.question_type === 'multiple_choice' && editForm.distractors && (
-                              <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase tracking-widest text-rose-400 mb-1 block">Distraktor</label>
-                                {editForm.distractors.map((d, di) => (
-                                  <input 
-                                    key={di}
-                                    value={d}
-                                    onChange={e => {
-                                      const newDistractors = [...editForm.distractors!];
-                                      newDistractors[di] = e.target.value;
-                                      setEditForm({ ...editForm, distractors: newDistractors });
-                                    }}
-                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-rose-400 text-slate-600 text-xs font-bold"
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div>
-                          <label className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-1 block">Penjelasan (Opsional)</label>
-                          <textarea 
-                            value={editForm.explanation || ''}
-                            onChange={e => setEditForm({ ...editForm, explanation: e.target.value })}
-                            className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-400 text-slate-600 text-xs font-bold min-h-[60px]"
-                            placeholder="Tulis penjelasan ringkas di sini..."
-                          />
-                        </div>
-                        
-                        {editForm.question_type === 'true_false' && (
-                          <div className="grid grid-cols-1 gap-2">
-                             <label className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Kenyataan:</label>
-                             <div className="text-xs font-bold bg-white p-2 border border-indigo-100 rounded-lg">
-                               {editForm.metadata?.term} bermaksud {editForm.metadata?.stated_meaning}
-                             </div>
-                             <div className="flex gap-2">
-                               <Button size="sm" onClick={() => setEditForm({...editForm, answer: 'true'})} className={cn(editForm.answer === 'true' && "bg-emerald-500")}>BETUL</Button>
-                               <Button size="sm" onClick={() => setEditForm({...editForm, answer: 'false'})} className={cn(editForm.answer === 'false' && "bg-rose-500")}>SALAH</Button>
-                             </div>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex flex-col gap-2">
-                        <button 
-                          onClick={saveEdit}
-                          className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-all"
-                          title="Simpan"
-                        >
-                          <Save className="w-5 h-5" />
-                        </button>
-                        <button 
-                          onClick={cancelEditing}
-                          className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-all"
-                          title="Batal"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              }
-
-              return (
-                <tr key={i} className="hover:bg-slate-50 transition-colors group">
+            {items.map((q, i) => (
+              <React.Fragment key={i}>
+                <tr className={cn("hover:bg-slate-50 transition-colors group", editingIndex === i && "bg-indigo-50/30")}>
                   <td className="p-4 text-[10px] font-black text-slate-300">{(i + 1).toString().padStart(2, '0')}</td>
                   <td className="p-4">
                      <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg text-slate-500">
@@ -228,80 +148,93 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
                      </div>
                   </td>
                   <td className="p-4">
-                    {q.question_type === 'multiple_choice' && (
-                      <div className="flex flex-col gap-1">
-                        <div className={cn("text-sm font-bold text-ink", isRTL(schema) && q.direction === 'term_to_meaning' && getTermFontClass(schema))}>
-                          {q.prompt}
+                    <div className="flex gap-4">
+                      {q.metadata?.image_url ? (
+                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 bg-white flex-shrink-0">
+                          <img src={q.metadata.image_url} alt="Thumbnail" className="w-full h-full object-cover" />
                         </div>
-                        <div className="flex gap-2 flex-wrap text-xs">
-                          <span className="text-emerald-600 font-bold underline bg-emerald-50 px-1 rounded">{q.answer}</span>
-                          {q.distractors?.map((d, di) => (
-                            <span key={di} className="text-slate-400 italic">{d}</span>
-                          ))}
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center text-slate-300 flex-shrink-0">
+                          <ImageIcon className="w-5 h-5" />
                         </div>
+                      )}
+                      <div className="flex-1">
+                        {q.question_type === 'multiple_choice' && (
+                          <div className="flex flex-col gap-1">
+                            <div className={cn("text-sm font-bold text-ink", isRTL(schema) && q.direction === 'term_to_meaning' && getTermFontClass(schema))}>
+                              {q.prompt}
+                            </div>
+                            <div className="flex gap-2 flex-wrap text-xs">
+                              <span className="text-emerald-600 font-bold underline bg-emerald-50 px-1 rounded">{q.answer}</span>
+                              {q.distractors?.map((d, di) => (
+                                <span key={di} className="text-slate-400 italic">{d}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {q.question_type === 'matching' && (
+                          <div className="flex flex-col gap-1">
+                            <div className="text-xs font-bold text-ink mb-1">Padankan {q.metadata?.pairs?.length || 0} pasangan:</div>
+                            <div className="flex flex-wrap gap-2">
+                               {q.metadata?.pairs?.slice(0, 3).map((p: any, idx: number) => (
+                                 <div key={idx} className="text-[10px] bg-slate-50 border px-2 py-1 rounded flex gap-1">
+                                   <span className="font-bold text-primary">{p.left}</span>
+                                   <span className="text-slate-300">↔</span>
+                                   <span className="text-slate-600 font-bold">{p.right}</span>
+                                 </div>
+                               ))}
+                               {(q.metadata?.pairs?.length || 0) > 3 && <span className="text-[10px] text-slate-300 flex items-center">+{q.metadata?.pairs?.length - 3} lagi</span>}
+                            </div>
+                          </div>
+                        )}
+
+                        {q.question_type === 'fill_blank' && (
+                          <div className="flex flex-col gap-1">
+                            <div className="text-xs font-bold text-ink">{q.prompt}</div>
+                            <div className="text-xs text-emerald-600 font-bold underline">Jawapan: {q.answer}</div>
+                          </div>
+                        )}
+
+                        {q.question_type === 'true_false' && (
+                          <div className="flex flex-col gap-1">
+                            <div className="text-xs font-bold text-ink italic">"{q.metadata?.term} bermaksud {q.metadata?.stated_meaning}"</div>
+                            <div className={cn("text-[10px] font-black uppercase tracking-widest", q.answer === 'true' ? "text-emerald-500" : "text-rose-500")}>
+                              {q.answer === 'true' ? 'Betul' : 'Salah'}
+                            </div>
+                          </div>
+                        )}
+
+                        {q.question_type === 'flashcard' && (
+                          <div className="flex flex-col gap-1">
+                            <div className={cn("text-sm font-bold text-ink", isRTL(schema) && getTermFontClass(schema))}>{q.prompt}</div>
+                            <div className="text-xs text-primary font-bold">Maksud: {q.answer}</div>
+                          </div>
+                        )}
+
                         {q.explanation && (
-                          <div className="mt-1 text-[10px] text-slate-400 italic font-medium bg-slate-50 px-2 py-1 rounded">
+                          <div className="mt-1 text-[10px] text-slate-400 italic font-medium bg-slate-50 px-2 py-1 rounded w-fit">
                              💡 {q.explanation}
                           </div>
                         )}
                       </div>
-                    )}
-
-                    {q.question_type === 'matching' && (
-                      <div className="flex flex-col gap-1">
-                        <div className="text-xs font-bold text-ink mb-1">Padankan {q.metadata?.pairs?.length || 0} pasangan:</div>
-                        <div className="flex flex-wrap gap-2">
-                           {q.metadata?.pairs?.slice(0, 3).map((p: any, idx: number) => (
-                             <div key={idx} className="text-[10px] bg-slate-50 border px-2 py-1 rounded flex gap-1">
-                               <span className="font-bold text-primary">{p.left}</span>
-                               <span className="text-slate-300">↔</span>
-                               <span className="text-slate-600 font-bold">{p.right}</span>
-                             </div>
-                           ))}
-                           {(q.metadata?.pairs?.length || 0) > 3 && <span className="text-[10px] text-slate-300 flex items-center">+{q.metadata?.pairs?.length - 3} lagi</span>}
-                        </div>
-                      </div>
-                    )}
-
-                    {q.question_type === 'fill_blank' && (
-                      <div className="flex flex-col gap-1">
-                        <div className="text-xs font-bold text-ink">
-                          {q.prompt}
-                        </div>
-                        <div className="text-xs text-emerald-600 font-bold underline">
-                          Jawapan: {q.answer}
-                        </div>
-                      </div>
-                    )}
-
-                    {q.question_type === 'true_false' && (
-                      <div className="flex flex-col gap-1">
-                        <div className="text-xs font-bold text-ink italic">
-                          "{q.metadata?.term} bermaksud {q.metadata?.stated_meaning}"
-                        </div>
-                        <div className={cn("text-[10px] font-black uppercase tracking-widest", q.answer === 'true' ? "text-emerald-500" : "text-rose-500")}>
-                          {q.answer === 'true' ? 'Betul' : 'Salah'}
-                        </div>
-                      </div>
-                    )}
-
-                    {q.question_type === 'flashcard' && (
-                      <div className="flex flex-col gap-1">
-                        <div className={cn("text-sm font-bold text-ink", isRTL(schema) && getTermFontClass(schema))}>{q.prompt}</div>
-                        <div className="text-xs text-primary font-bold">Maksud: {q.answer}</div>
-                        {q.explanation && (
-                          <div className="mt-1 text-[10px] text-slate-400 italic font-medium bg-slate-50 px-2 py-1 rounded">
-                             💡 {q.explanation}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    </div>
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      {q.question_type === 'multiple_choice' && (
+                        <button 
+                          onClick={() => handleRegenerateDistractors(i)}
+                          disabled={isRegenerating === i}
+                          className="p-2 text-slate-300 hover:text-emerald-500 rounded-lg hover:bg-emerald-50 transition-all disabled:opacity-50"
+                          title="Jana semula distraktor"
+                        >
+                          {isRegenerating === i ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        </button>
+                      )}
                       <button 
-                        onClick={() => startEditing(i)}
-                        className="p-2 text-slate-300 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all"
+                        onClick={() => setEditingIndex(editingIndex === i ? null : i)}
+                        className={cn("p-2 rounded-lg transition-all", editingIndex === i ? "text-indigo-600 bg-indigo-50" : "text-slate-300 hover:text-indigo-600 hover:bg-indigo-50")}
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -314,8 +247,26 @@ export default function GenerationPreview({ questions, schema, isEnhancing, enha
                     </div>
                   </td>
                 </tr>
-              );
-            })}
+                {editingIndex === i && (
+                  <tr>
+                    <td colSpan={4} className="p-4 bg-slate-50/50">
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <QuestionEditor
+                          question={q as any}
+                          schema={schema}
+                          topicId="temp" // use temp for preview
+                          onSave={saveEdit}
+                          onCancel={() => setEditingIndex(null)}
+                        />
+                      </motion.div>
+                    </td>
+                </tr>
+                )}
+              </React.Fragment>
+            ))}
           </tbody>
         </table>
       </div>

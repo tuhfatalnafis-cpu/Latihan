@@ -28,14 +28,23 @@ export default function FlashcardMode({ question, schema, isFlipped, onFlip, onA
         transition={{ type: "spring", stiffness: 260, damping: 20 }}
       >
         {/* Front (Term) */}
-        <div className="absolute inset-0 backface-hidden bg-white rounded-[3rem] shadow-soft-lg flex flex-col items-center justify-center p-10 text-center border-2 border-slate-50">
-           {metadata.image_url && (
-             <div className="absolute top-8 left-1/2 -translate-x-1/2 w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl p-2">
-               {metadata.image_url.startsWith('http') ? <img src={metadata.image_url} alt="icon" className="w-full h-full object-contain" /> : metadata.image_url}
+        <div className="absolute inset-0 backface-hidden bg-white rounded-[3rem] shadow-soft-lg flex flex-col items-center justify-center p-0 text-center border-2 border-slate-50 overflow-hidden">
+           {metadata.image_url ? (
+             <div className="w-full h-1/2 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100">
+               <img 
+                 src={metadata.image_url} 
+                 alt="Imej" 
+                 className="w-full h-full object-contain"
+                 referrerPolicy="no-referrer"
+               />
+             </div>
+           ) : (
+             <div className="pt-10">
+               <div className="w-16 h-1 bg-slate-100 rounded-full mx-auto" />
              </div>
            )}
-           <div className={cn("flex flex-col items-center", showRTL && "text-right")} dir={showRTL ? "rtl" : "ltr"}>
-             <h3 className={cn("font-black text-ink leading-snug pt-12", getTermFontClass(schema), showRTL ? "text-5xl" : "text-3xl")}>
+           <div className={cn("flex flex-col items-center flex-1 justify-center px-10", showRTL && "text-right")} dir={showRTL ? "rtl" : "ltr"}>
+             <h3 className={cn("font-black text-ink leading-snug", getTermFontClass(schema), showRTL ? "text-5xl" : "text-3xl")}>
                {prompt}
              </h3>
              {schema.extra_fields?.map((f: any) => metadata[f.key] && (
@@ -44,7 +53,7 @@ export default function FlashcardMode({ question, schema, isFlipped, onFlip, onA
                </div>
              ))}
            </div>
-           <div className="mt-auto pt-6 flex items-center gap-2 text-primary font-black uppercase text-[10px] tracking-widest">
+           <div className="pb-8 flex items-center gap-2 text-primary font-black uppercase text-[10px] tracking-widest">
              <RotateCcw className="w-3 h-3" /> Tap to Flip
            </div>
         </div>

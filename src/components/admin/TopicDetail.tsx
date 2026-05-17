@@ -31,6 +31,7 @@ import { useSubjectSchema } from '../../hooks/useSubjectSchema';
 import { getTermLabel, getMeaningLabel, isRTL, getTermFontClass } from '../../lib/subjectHelpers';
 import VocabImporter from './VocabImporter';
 import QuestionGenerator from './QuestionGenerator';
+import QuestionEditor from './QuestionEditor';
 import { supabase } from '../../lib/supabase';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { toast } from 'sonner';
@@ -59,6 +60,7 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
   const [editName, setEditName] = useState(topic.name);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSets, setExpandedSets] = useState<string[]>([]);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const { schema } = useSubjectSchema(topic.id);
   
   // Confirmation state
@@ -74,6 +76,31 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
     onConfirm: () => {},
   });
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleUpdateQuestion = async (updatedQ: Question) => {
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .update({
+          prompt: updatedQ.prompt,
+          answer: updatedQ.answer,
+          explanation: updatedQ.explanation,
+          distractors: updatedQ.distractors,
+          metadata: updatedQ.metadata
+        })
+        .eq('id', updatedQ.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setQuestions(prev => prev.map(q => q.id === updatedQ.id ? (data as Question) : q));
+      setEditingQuestion(null);
+      toast.success('Soalan berjaya dikemaskini');
+    } catch (err: any) {
+      toast.error('Gagal kemaskini soalan: ' + err.message);
+    }
+  };
 
   const handleNormalizeJawi = async () => {
     setConfirmState({
@@ -178,6 +205,16 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
       onConfirm: async () => {
         setIsDeleting(true);
         try {
+          // Find questions to get image URLs
+          const setQuestionsToDelete = questions.filter(q => (q.metadata as any)?.set_name === setName);
+          const { deleteQuestionImage } = await import('../../lib/imageUpload');
+          
+          for (const q of setQuestionsToDelete) {
+            if (q.metadata?.image_url) {
+              await deleteQuestionImage(q.metadata.image_url);
+            }
+          }
+
           const { error } = await supabase
             .from('questions')
             .delete()
@@ -232,6 +269,15 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
         message: `Ini akan turut memadam:\n• ${qCount || 0} soalan\n• ${vCount || 0} perbendaharaan kata\n• Semua kemajuan pelajar berkaitan\n\nTindakan ini tidak boleh dibuat asal.`,
         onConfirm: async () => {
           setIsDeleting(true);
+          
+          // Delete all images for this topic first
+          const { deleteQuestionImage } = await import('../../lib/imageUpload');
+          for (const q of questions) {
+            if (q.metadata?.image_url) {
+              await deleteQuestionImage(q.metadata.image_url);
+            }
+          }
+
           const { error } = await supabase.from('topics').delete().eq('id', topic.id);
           setIsDeleting(false);
           if (error) {
@@ -257,6 +303,12 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
       message: 'Adakah anda pasti mahu memadam soalan ini? Tindakan ini tidak boleh dibuat asal.',
       onConfirm: async () => {
         setIsDeleting(true);
+        const qToDelete = questions.find(q => q.id === id);
+        if (qToDelete?.metadata?.image_url) {
+          const { deleteQuestionImage } = await import('../../lib/imageUpload');
+          await deleteQuestionImage(qToDelete.metadata.image_url);
+        }
+
         const { error } = await supabase.from('questions').delete().eq('id', id);
         setIsDeleting(false);
         if (error) {
@@ -587,12 +639,20 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
                                           </div>
                                         </td>
                                         <td className="py-5 text-right">
-                                          <button 
-                                            onClick={() => handleDeleteQuestion(q.id)}
-                                            className="p-3 text-ink-muted hover:text-rose-500 hover:bg-rose-50 transition-all rounded-xl opacity-0 group-hover/row:opacity-100"
-                                          >
-                                            <Trash2 className="w-4 h-4" />
-                                          </button>
+                                          <div className="flex justify-end gap-2">
+                                            <button 
+                                              onClick={() => setEditingQuestion(q)}
+                                              className="p-3 text-ink-muted hover:text-primary hover:bg-primary/5 transition-all rounded-xl opacity-0 group-hover/row:opacity-100"
+                                            >
+                                              <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                              onClick={() => handleDeleteQuestion(q.id)}
+                                              className="p-3 text-ink-muted hover:text-rose-500 hover:bg-rose-50 transition-all rounded-xl opacity-0 group-hover/row:opacity-100"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </div>
                                         </td>
                                       </tr>
                                     ))}
@@ -611,6 +671,36 @@ export default function TopicDetail({ user, topic, onBack, onUpdate, onDelete, b
           )}
         </AnimatePresence>
       )}
+
+      <AnimatePresence>
+        {editingQuestion && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-2xl bg-white rounded-[40px] shadow-2xl overflow-hidden relative"
+            >
+              <button 
+                onClick={() => setEditingQuestion(null)}
+                className="absolute top-6 right-6 p-2 text-slate-300 hover:text-slate-800 hover:bg-slate-50 rounded-xl transition-all z-10"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+              <div className="p-8">
+                <h3 className="text-2xl font-black text-ink mb-6">Edit Soalan</h3>
+                <QuestionEditor
+                  question={editingQuestion}
+                  schema={schema}
+                  topicId={topic.id}
+                  onSave={handleUpdateQuestion}
+                  onCancel={() => setEditingQuestion(null)}
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {showImporter && (
         <VocabImporter 

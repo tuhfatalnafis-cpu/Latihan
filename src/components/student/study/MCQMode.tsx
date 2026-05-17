@@ -26,16 +26,28 @@ export default function MCQMode({ question, schema, feedback, onAnswer }: MCQMod
 
   return (
     <div className="w-full max-w-2xl px-4 flex flex-col items-center animate-in slide-in-from-bottom-8 duration-500">
-      <Card className="mb-8 text-center relative overflow-hidden w-full" padding="lg">
+      <Card className="mb-8 text-center relative overflow-hidden w-full p-0" padding="none">
          <div className="flex flex-col items-center">
-           <div className="w-16 h-1 bg-slate-100 rounded-full mb-8" />
-           <div dir={showPromptRTL ? "rtl" : "ltr"}>
-             <h3 className={cn(
-               "font-black text-ink leading-tight", 
-               showPromptRTL ? cn(getTermFontClass(schema), "text-5xl") : "text-4xl"
-             )}>
-                {prompt}
-             </h3>
+           {metadata.image_url && (
+             <div className="w-full h-48 md:h-64 bg-slate-50 flex items-center justify-center overflow-hidden border-b border-slate-100">
+               <img 
+                 src={metadata.image_url} 
+                 alt="Soalan" 
+                 className="w-full h-full object-contain"
+                 referrerPolicy="no-referrer"
+               />
+             </div>
+           )}
+           <div className="p-8 md:p-12 w-full flex flex-col items-center">
+             <div className="w-16 h-1 bg-slate-100 rounded-full mb-8" />
+             <div dir={showPromptRTL ? "rtl" : "ltr"}>
+               <h3 className={cn(
+                 "font-black text-ink leading-tight", 
+                 showPromptRTL ? cn(getTermFontClass(schema), "text-5xl") : "text-4xl"
+               )}>
+                  {prompt}
+               </h3>
+             </div>
            </div>
          </div>
       </Card>
